@@ -1,0 +1,308 @@
+DECLARE 
+  v_emp_name VARCHAR2(200); 
+  v_prev_category VARCHAR2(500) := NULL; 
+  v_prev_category_650 VARCHAR2(500) := NULL; -- New variable for category 650
+  
+  -- Variables for accumulating category sums
+  v_company_bags_sum NUMBER := 0; 
+  v_local_bags_sum NUMBER := 0; 
+  v_warehouse_bags_sum NUMBER := 0; 
+  v_owned_warehouse_sum NUMBER := 0; 
+  v_total_stock_sum NUMBER := 0; 
+  v_advance_bags_sum NUMBER := 0; 
+  v_amanat_bags_sum NUMBER := 0; 
+  v_total_allocation_sum NUMBER := 0; 
+  v_available_for_sale_sum NUMBER := 0; 
+  
+  -- Variables for accumulating grand totals
+  v_grand_company_bags_sum NUMBER := 0; 
+  v_grand_local_bags_sum NUMBER := 0; 
+  v_grand_warehouse_bags_sum NUMBER := 0; 
+  v_grand_owned_warehouse_sum NUMBER := 0; 
+  v_grand_total_stock_sum NUMBER := 0; 
+  v_grand_advance_bags_sum NUMBER := 0; 
+  v_grand_amanat_bags_sum NUMBER := 0; 
+  v_grand_total_allocation_sum NUMBER := 0; 
+  v_grand_available_for_sale_sum NUMBER := 0; 
+
+ 
+BEGIN 
+  -- JavaScript (unchanged)
+  htp.p('<script> function adjustColumnWidth() { var table = document.querySelector("table"); 
+  var itemNameColumnIndex = 1; 
+  var maxWidth = 0; var rows = table.querySelectorAll("tbody tr"); rows.forEach(function(row) { var itemNameCell = row.cells[itemNameColumnIndex]; 
+  if (itemNameCell) { var cellWidth = itemNameCell.scrollWidth; if (cellWidth > maxWidth) { maxWidth = cellWidth; } } }); 
+  var header = table.querySelector("thead th.item-name-column"); if (header) { header.style.width = maxWidth + "px"; } 
+  var dataCells = table.querySelectorAll("tbody td.item-name-column"); dataCells.forEach(function(cell) { cell.style.width = maxWidth + "px"; }); }
+   function printDiv(printpage) 
+   { adjustColumnWidth(); var headstr = "<html><head><title></title><style>"; 
+   headstr += "@page { size: A4 landscape; margin: 10mm; }"; headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
+   headstr += ".button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }"; 
+   headstr += ".button1 { font-size: 16px; }"; headstr += "table { border-collapse: collapse; width: 100%; margin: 0; padding: 0; }";
+   headstr += "th, td { text-align: left; padding: 3px; font-size: 10px; line-height: 1.1; }";
+   headstr += "th { background-color: rgba(146, 208, 80, 0.237); -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+   headstr += ".separator { border-top: 1px solid black; }"; 
+   headstr += "h4 { background-color:#000080; color:white; padding:5px; margin:0; font-size:13px; text-align:left; }"; 
+   headstr += "h3 { margin: 0; display: flex; align-items: center; justify-content: center;
+    background-color:#000080; -webkit-print-color-adjust: exact; print-color-adjust: exact; }"; 
+    headstr += "@media print { thead {display: table-header-group;} tfoot {display: table-footer-group;} }"; 
+    headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }"; 
+    headstr += "#div_print1 { margin: 0; padding: 0; }"; 
+    headstr += ".grand-total { font-weight:bold; background-color:#d9ead3; border-top: 3px double black; }"; 
+    headstr += "</style></head><body>"; var footstr = "</body></html>"; var newstr = document.getElementById(printpage).innerHTML; 
+    var oldstr = document.body.innerHTML; document.body.innerHTML = headstr + newstr + footstr; window.print(); 
+    document.body.innerHTML = oldstr; return false; } </script>'); 
+  
+  -- PRINT BUTTON (unchanged)
+  htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>'); 
+  
+  -- MAIN DIV (unchanged)
+  htp.p('<div id="all_reports">'); 
+  
+  -- HEADER (unchanged)
+  htp.p(' <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;"> <h2 style="margin:0;font-size:20px;">IBRAHIM TRADERS</h2> <img src="#APP_FILES#WhatsApp Image 2025-08-21 at 11.35.38 AM.jpeg" style="height:40px;"> </div> '); 
+  htp.p(' <div style="font-family: Arial, sans-serif; font-size: 13px; padding: 6px; display: flex; justify-content: space-between; align-items: center; width: 100%;"> <span style="text-align: left;"> <b>FROM DATE:</b> '|| :P939_FROM_DATE ||' &nbsp;&nbsp; <b>TO DATE:</b> '|| :P939_TO_DATE ||' </span> <span style="text-align: right;"> <b>Print By:</b> '|| :APP_USER ||' </span> </div>'); 
+  
+  -- REPORT TITLE (unchanged)
+  htp.p('<h3 style="background:#000080;color:white;padding:5px;margin:0;">Master Stock Summary (On Cutoff Date)</h3>'); 
+  
+  -- Process categories except 650
+  FOR rec IN ( 
+    SELECT CATEGORY_ID, CATEGORY_NAME, ITEM_ID, ITEM_NAME, COMPANY_BAGS,
+     LOCAL_BAGS, WAREHOUSE_BAGS, OWNED_WAREHOUSE, TOTAL_STOCK, ADVANCE_BAGS, AMANAT_BAGS, TOTAL_ALLOCATION, AVAILABLE_FOR_SALE 
+    FROM 
+    TABLE( MASTER_STOCK_CUT_DATE_SUMMARY( :GV_ORG_ID , TO_DATE(:P939_FROM_DATE, 'DD-MON-YYYY'), TO_DATE(:P939_TO_DATE, 'DD-MON-YYYY') ) )
+     C 
+    where category_id <> 650 
+  ) LOOP 
+    -- NEW CATEGORY STARTS
+    IF v_prev_category IS NULL OR v_prev_category <> rec.CATEGORY_NAME THEN 
+      -- If not the first category, output summary row for previous category
+      IF v_prev_category IS NOT NULL THEN 
+        htp.p('<tr style="font-weight:bold; background-color:#f2f2f2; border-top: 2px solid green;">' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total Sum:</b></td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_company_bags_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_local_bags_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_warehouse_bags_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_owned_warehouse_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_stock_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_advance_bags_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_amanat_bags_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_allocation_sum,'999G999G999G990D00') || '</td>' || 
+              '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_available_for_sale_sum,'999G999G999G990D00') || '</td>' || 
+              '</tr></tbody></table>'); 
+      END IF; 
+      
+      -- Reset accumulators for new category
+      v_company_bags_sum := 0; 
+      v_local_bags_sum := 0; 
+      v_warehouse_bags_sum := 0; 
+      v_owned_warehouse_sum := 0; 
+      v_total_stock_sum := 0; 
+      v_advance_bags_sum := 0; 
+      v_amanat_bags_sum := 0; 
+      v_total_allocation_sum := 0; 
+      v_available_for_sale_sum := 0; 
+      
+      -- Print Category Header
+      htp.p(' <tr style="background:#EEE;"> <td colspan="10" style="font-weight:bold;font-size:13px;"> <b>Category Name:</b> ' || rec.CATEGORY_NAME || ' </td> </tr> '); 
+      
+      -- Start new table for category
+      htp.p('<table style="width:100%; border-collapse:collapse;"> <thead> <colgroup> <col style="width:15%;"> <col style="width:10%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> </colgroup> <tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;"> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">ITEM NAME</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">COMPANY BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >LOCAL BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >WAREHOUSE BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >OWNED WAREHOUSE</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >TOTAL STOCK</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >ADVANCE BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >AMANAT BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >TOTAL ALLOCATION</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >AVAILABLE FOR SALE</th> </tr> </thead> <tbody>'); 
+      
+      v_prev_category := rec.CATEGORY_NAME; 
+    END IF; 
+    
+    -- Accumulate values for current category
+    v_company_bags_sum := v_company_bags_sum + NVL(rec.COMPANY_BAGS, 0); 
+    v_local_bags_sum := v_local_bags_sum + NVL(rec.LOCAL_BAGS, 0); 
+    v_warehouse_bags_sum := v_warehouse_bags_sum + NVL(rec.WAREHOUSE_BAGS, 0); 
+    v_owned_warehouse_sum := v_owned_warehouse_sum + NVL(rec.OWNED_WAREHOUSE, 0); 
+    v_total_stock_sum := v_total_stock_sum + NVL(rec.TOTAL_STOCK, 0); 
+    v_advance_bags_sum := v_advance_bags_sum + NVL(rec.ADVANCE_BAGS, 0); 
+    v_amanat_bags_sum := v_amanat_bags_sum + NVL(rec.AMANAT_BAGS, 0); 
+    v_total_allocation_sum := v_total_allocation_sum + NVL(rec.TOTAL_ALLOCATION, 0); 
+    v_available_for_sale_sum := v_available_for_sale_sum + NVL(rec.AVAILABLE_FOR_SALE, 0); 
+    
+    -- Accumulate values for grand total
+    v_grand_company_bags_sum := v_grand_company_bags_sum + NVL(rec.COMPANY_BAGS, 0); 
+    v_grand_local_bags_sum := v_grand_local_bags_sum + NVL(rec.LOCAL_BAGS, 0); 
+    v_grand_warehouse_bags_sum := v_grand_warehouse_bags_sum + NVL(rec.WAREHOUSE_BAGS, 0); 
+    v_grand_owned_warehouse_sum := v_grand_owned_warehouse_sum + NVL(rec.OWNED_WAREHOUSE, 0); 
+    v_grand_total_stock_sum := v_grand_total_stock_sum + NVL(rec.TOTAL_STOCK, 0); 
+    v_grand_advance_bags_sum := v_grand_advance_bags_sum + NVL(rec.ADVANCE_BAGS, 0); 
+    v_grand_amanat_bags_sum := v_grand_amanat_bags_sum + NVL(rec.AMANAT_BAGS, 0); 
+    v_grand_total_allocation_sum := v_grand_total_allocation_sum + NVL(rec.TOTAL_ALLOCATION, 0); 
+    v_grand_available_for_sale_sum := v_grand_available_for_sale_sum + NVL(rec.AVAILABLE_FOR_SALE, 0); 
+    
+    -- ITEM ROW
+    htp.p(' <tr> <td style="padding:4px; text-align:left; border:1px solid #ccc;">'|| rec.ITEM_NAME ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.COMPANY_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.LOCAL_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.WAREHOUSE_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.OWNED_WAREHOUSE,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.TOTAL_STOCK,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.ADVANCE_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.AMANAT_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.TOTAL_ALLOCATION,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec.AVAILABLE_FOR_SALE,'999G999G999G990D00') ||'</td> </tr>'); 
+  END LOOP; 
+  
+  -- Output summary for last non-650 category
+  IF v_prev_category IS NOT NULL THEN 
+    htp.p('<tr style="font-weight:bold; background-color:#f2f2f2; border-top: 2px solid green;">' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total Sum:</b></td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_company_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_local_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_warehouse_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_owned_warehouse_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_stock_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_advance_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_amanat_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_allocation_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_available_for_sale_sum,'999G999G999G990D00') || '</td>' || 
+          '</tr></tbody></table>'); 
+  END IF; 
+  
+    -- Add Grand Total Row (modified condition)
+  IF v_prev_category IS NOT NULL OR v_prev_category_650 IS NOT NULL THEN 
+    htp.p('<table style="width:100%; border-collapse:collapse; margin-top:20px;">'); 
+    htp.p( '<tr class="grand-total">' || 
+           '<colgroup> <col style="width:15%;"> <col style="width:10%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> </colgroup>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>FERTILIZER TOTAL:</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_company_bags_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_local_bags_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_warehouse_bags_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_owned_warehouse_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_total_stock_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_advance_bags_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_amanat_bags_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_total_allocation_sum),'999G999G999G990D00') || '</b></td>' || 
+           '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || TO_CHAR(ROUND(v_grand_available_for_sale_sum),'999G999G999G990D00') || '</b></td>' || 
+           '</tr>' ); 
+    htp.p('</table>'); 
+  END IF; 
+  
+  -- Process category 650 separately
+  FOR rec_650 IN ( 
+    SELECT CATEGORY_ID, CATEGORY_NAME, ITEM_ID, ITEM_NAME, COMPANY_BAGS,
+     LOCAL_BAGS, WAREHOUSE_BAGS, OWNED_WAREHOUSE, TOTAL_STOCK, ADVANCE_BAGS, AMANAT_BAGS, TOTAL_ALLOCATION, AVAILABLE_FOR_SALE 
+    FROM
+     TABLE( MASTER_STOCK_CUT_DATE_SUMMARY( :GV_ORG_ID , TO_DATE(:P939_FROM_DATE, 'DD-MON-YYYY'), TO_DATE(:P939_TO_DATE, 'DD-MON-YYYY') ) ) 
+    WHERE category_id = 650 
+  ) LOOP 
+    -- NEW CATEGORY STARTS for 650
+    IF v_prev_category_650 IS NULL THEN 
+      -- Reset accumulators for category 650
+      v_company_bags_sum := 0; 
+      v_local_bags_sum := 0; 
+      v_warehouse_bags_sum := 0; 
+      v_owned_warehouse_sum := 0; 
+      v_total_stock_sum := 0; 
+      v_advance_bags_sum := 0; 
+      v_amanat_bags_sum := 0; 
+      v_total_allocation_sum := 0; 
+      v_available_for_sale_sum := 0; 
+      
+      -- Print Category Header for 650
+      htp.p(' <tr style="background:#EEE;"> <td colspan="10" style="font-weight:bold;font-size:13px;"> <b>Category Name:</b> ' || rec_650.CATEGORY_NAME || ' </td> </tr> '); 
+      
+      -- Start new table for category 650
+      htp.p('<table style="width:100%; border-collapse:collapse;"> <thead> <colgroup> <col style="width:15%;"> <col style="width:10%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> </colgroup> <tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;"> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">ITEM NAME</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">COMPANY BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >LOCAL BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >WAREHOUSE BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >OWNED WAREHOUSE</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >TOTAL STOCK</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >ADVANCE BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >AMANAT BAGS</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >TOTAL ALLOCATION</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >AVAILABLE FOR SALE</th> </tr> </thead> <tbody>'); 
+      
+      v_prev_category_650 := rec_650.CATEGORY_NAME; 
+    END IF; 
+    
+    -- Accumulate values for category 650
+    v_company_bags_sum := v_company_bags_sum + NVL(rec_650.COMPANY_BAGS, 0); 
+    v_local_bags_sum := v_local_bags_sum + NVL(rec_650.LOCAL_BAGS, 0); 
+    v_warehouse_bags_sum := v_warehouse_bags_sum + NVL(rec_650.WAREHOUSE_BAGS, 0); 
+    v_owned_warehouse_sum := v_owned_warehouse_sum + NVL(rec_650.OWNED_WAREHOUSE, 0); 
+    v_total_stock_sum := v_total_stock_sum + NVL(rec_650.TOTAL_STOCK, 0); 
+    v_advance_bags_sum := v_advance_bags_sum + NVL(rec_650.ADVANCE_BAGS, 0); 
+    v_amanat_bags_sum := v_amanat_bags_sum + NVL(rec_650.AMANAT_BAGS, 0); 
+    v_total_allocation_sum := v_total_allocation_sum + NVL(rec_650.TOTAL_ALLOCATION, 0); 
+    v_available_for_sale_sum := v_available_for_sale_sum + NVL(rec_650.AVAILABLE_FOR_SALE, 0); 
+    
+    -- Accumulate values for grand total
+    v_grand_company_bags_sum := v_grand_company_bags_sum + NVL(rec_650.COMPANY_BAGS, 0); 
+    v_grand_local_bags_sum := v_grand_local_bags_sum + NVL(rec_650.LOCAL_BAGS, 0); 
+    v_grand_warehouse_bags_sum := v_grand_warehouse_bags_sum + NVL(rec_650.WAREHOUSE_BAGS, 0); 
+    v_grand_owned_warehouse_sum := v_grand_owned_warehouse_sum + NVL(rec_650.OWNED_WAREHOUSE, 0); 
+    v_grand_total_stock_sum := v_grand_total_stock_sum + NVL(rec_650.TOTAL_STOCK, 0); 
+    v_grand_advance_bags_sum := v_grand_advance_bags_sum + NVL(rec_650.ADVANCE_BAGS, 0); 
+    v_grand_amanat_bags_sum := v_grand_amanat_bags_sum + NVL(rec_650.AMANAT_BAGS, 0); 
+    v_grand_total_allocation_sum := v_grand_total_allocation_sum + NVL(rec_650.TOTAL_ALLOCATION, 0); 
+    v_grand_available_for_sale_sum := v_grand_available_for_sale_sum + NVL(rec_650.AVAILABLE_FOR_SALE, 0); 
+    
+    -- ITEM ROW for category 650
+    htp.p(' <tr> <td style="padding:4px; text-align:left; border:1px solid #ccc;">'|| rec_650.ITEM_NAME ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.COMPANY_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.LOCAL_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.WAREHOUSE_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.OWNED_WAREHOUSE,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.TOTAL_STOCK,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.ADVANCE_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.AMANAT_BAGS,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.TOTAL_ALLOCATION,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:right; border:1px solid #ccc;">'|| TO_CHAR(rec_650.AVAILABLE_FOR_SALE,'999G999G999G990D00') ||'</td> </tr>'); 
+  END LOOP; 
+  
+  -- Output summary for category 650
+  IF v_prev_category_650 IS NOT NULL THEN 
+    htp.p('<tr style="font-weight:bold; background-color:#f2f2f2; border-top: 2px solid green;">' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total Sum:</b></td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_company_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_local_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_warehouse_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_owned_warehouse_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_stock_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_advance_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_amanat_bags_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_total_allocation_sum,'999G999G999G990D00') || '</td>' || 
+          '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_available_for_sale_sum,'999G999G999G990D00') || '</td>' || 
+          '</tr></tbody></table>'); 
+  END IF; 
+  
+
+htp.p('<table style="width:100%; border-collapse:collapse; margin-top:25px;">');
+
+-- Column width control
+htp.p(
+  '<colgroup>' ||
+  '<col style="width:17%;">' ||  -- GRAND TOTAL label
+  '<col style="width:11%;">'  ||  -- Company Bags
+  '<col style="width:9%;">'  ||  -- Local Bags
+  '<col style="width:9%;">'  ||  -- Warehouse Bags
+  '<col style="width:9%;">'  ||  -- Owned Warehouse
+  '<col style="width:9%;">'  ||  -- Total Stock
+  '<col style="width:9%;">'  ||  -- Advance Bags
+  '<col style="width:9%;">'  ||  -- Amanat Bags
+  '<col style="width:9%;">'  ||  -- Total Allocation
+  '<col style="width:9%;">'  ||  -- Available For Sale
+  '</colgroup>'
+);
+
+htp.p(
+  '<tr class="grand-total" style="background:#c9daf8;">' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>GRAND TOTAL:</b></td>' ||
+
+  '<td style="padding:5px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_company_bags_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_local_bags_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_warehouse_bags_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_owned_warehouse_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_total_stock_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_advance_bags_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_amanat_bags_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_total_allocation_sum),'999G999G999G990') || '</b></td>' ||
+
+  '<td style="padding:6px; text-align:right; border:1px solid #000;"><b>' ||
+  TO_CHAR(ROUND(v_grand_available_for_sale_sum),'999G999G999G990') || '</b></td>' ||
+
+  '</tr>'
+);
+
+
+
+htp.p('</table>');
+  
+  htp.p('</div>'); 
+END;
