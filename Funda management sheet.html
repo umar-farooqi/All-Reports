@@ -67,188 +67,342 @@ BEGIN
     
     -- HEADER
     htp.p(' <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;"> <h2 style="margin:0;font-size:20px;">IBRAHIM TRADERS</h2> <img src="#APP_FILES#WhatsApp Image 2025-08-21 at 11.35.38 AM.jpeg" style="height:40px;"> </div> ');
-    htp.p(' <div style="font-family: Arial, sans-serif; font-size: 13px; padding: 6px; display: flex; justify-content: space-between; align-items: center; width: 100%;"> <span style="text-align: right;"> <b>Print By:</b> '|| :APP_USER ||' </span> </div>');
+
+    htp.p('
+    <div style="
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    padding: 6px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;">
+    <span style="text-align: right;">
+        <b>Print By:</b> ' || :APP_USER || '
+    </span>
+      </div>');
     
     -- REPORT TITLE
     htp.p('<h3 style="background:#000080;color:white;padding:5px;margin:0;">Funds Management Sheet</h3>');
     
     FOR rec IN (
         WITH PURCHASE_INVOICE AS (
-            SELECT POD_ID, SUM(INVOICE_BAGS) AS INVOICE_BAGS 
-            FROM TABLE(AB_PURCHASE_ORDER_PKG.PURCHASE_ORDER_INVOICE(:GV_ORG_ID))
-            GROUP BY POD_ID
+            SELECT 
+                POD_ID,
+                SUM(INVOICE_BAGS) AS INVOICE_BAGS
+            FROM
+                TABLE(AB_PURCHASE_ORDER_PKG.PURCHASE_ORDER_INVOICE(:GV_ORG_ID))
+            GROUP BY 
+                POD_ID
         ),
         INSTROMENT_INFO AS (
-            SELECT C.ITEM_ID, C.ITEM_NAME, ROUND(NVL(SUM(C.NET_AMOUNT), 0), 3) AS NET_AMOUNT, C.INSTRUMENT_NOO 
-            FROM TABLE(AB_PURCHASE_ORDER_PKG.COMPANY_PURCHASE_ORDER(:GV_ORG_ID)) C 
+            SELECT
+                C.ITEM_ID,
+                C.ITEM_NAME,
+                ROUND(NVL(SUM(C.NET_AMOUNT), 0), 3) AS NET_AMOUNT,
+                C.INSTRUMENT_NOO
+            FROM
+                TABLE(AB_PURCHASE_ORDER_PKG.COMPANY_PURCHASE_ORDER(:GV_ORG_ID)) C
             LEFT JOIN PURCHASE_INVOICE PI ON PI.POD_ID = C.POD_ID 
-            WHERE TRUNC(C.TRANSACTION_DATE) BETWEEN NVL(TO_DATE(:P778_FROM_DATE, 'DD-MON-YYYY'), TRUNC(C.TRANSACTION_DATE)) 
-            AND NVL(TO_DATE(:P778_TO_DATE, 'DD-MON-YYYY'),TRUNC(C.TRANSACTION_DATE)) 
-            AND C.ITEM_ID = NVL(:P778_PRODUCT_NAME,C.ITEM_ID) 
-            AND C.STATUS <> 'SUB PURCHASE ORDER' 
-            AND PURCHASING_TYPE = 'COMPANY' 
-            GROUP BY C.ITEM_ID, C.ITEM_NAME, C.INSTRUMENT_NOO 
+            WHERE
+                TRUNC(C.TRANSACTION_DATE) BETWEEN NVL(TO_DATE(:P778_FROM_DATE, 'DD-MON-YYYY'),
+                TRUNC(C.TRANSACTION_DATE)) AND NVL(TO_DATE(:P778_TO_DATE, 'DD-MON-YYYY'),TRUNC(C.TRANSACTION_DATE)) 
+            AND C.ITEM_ID = NVL(:P778_PRODUCT_NAME,C.ITEM_ID)        
+            AND C.STATUS <> 'SUB PURCHASE ORDER'  
+            AND PURCHASING_TYPE = 'COMPANY'
+            GROUP BY 
+                C.ITEM_ID,
+                C.ITEM_NAME,
+                C.INSTRUMENT_NOO
             ORDER BY PO_ID DESC
         ),
         BANK_NAME as (
-            SELECT AST.REG_NAME, ASM.SR_IDS 
-            FROM AB_SETUP_REGISTRATION ASM 
-            JOIN AB_SETUP_REGISTRATION AST ON AST.SR_ID=ASM.SR_IDS AND AST.REG_TYPE='BANK' 
-            WHERE ASM.REG_TYPE='BANK LOV' 
-            AND (ASM.ORG_ID= :GV_ORG_ID OR ASM.ORG_ID=1001) 
-            GROUP BY AST.REG_NAME , ASM.SR_IDS
-        ),
-        COLLETERAL AS (
-            select AFLD.ID AS FOLD_ID, AFL.FACILITIES_ID , AFLD.BG_SECURITY 
-            from AB_FACILITIES_LETTER AFL 
-            JOIN AB_FACILITIES_LETTER_DET AFLD ON AFLD.ID = AFL.FACILITIES_ID 
-            WHERE AFL.ORG_ID = :GV_ORG_ID
+            SELECT 
+                AST.REG_NAME, 
+                ASM.SR_IDS 
+            FROM 
+                AB_SETUP_REGISTRATION ASM
+            JOIN AB_SETUP_REGISTRATION AST ON AST.SR_ID=ASM.SR_IDS AND AST.REG_TYPE='BANK'
+            WHERE 
+                ASM.REG_TYPE='BANK LOV'
+            AND (ASM.ORG_ID= :GV_ORG_ID OR ASM.ORG_ID=1001)
+            GROUP BY
+                AST.REG_NAME , 
+                ASM.SR_IDS
         ),
         FOL_DETAIL AS(
-            SELECT AFL.ID FOL_ID, BN.REG_NAME BANK_NAME , AFLD.FOL_HINT, AFLD.ID FOLD_ID, AFLD.BG_SECURITY, AFL.BANK_BRANCH, 
-                   ALD.LOOKUP_DET_NAME FACILITIES_NAME, AFA.ID ACCOUNT_ID, AFA.ACCOUNT_NO ACCOUNT_NOO, 
-                   CASE WHEN ASB.REG_CODE IS NULL THEN ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME 
-                        ELSE ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END ACCOUNT_NAME, 
-                   ASCM.REG_NAME COMPANY_NAME 
-            FROM AB_FACILITIES_LETTER AFL 
-            LEFT JOIN AB_FACILITIES_LETTER_DET AFLD ON AFLD.MAST_ID = AFL.ID 
-            LEFT JOIN AB_FACILITIES_LETTER_DET AFLDS ON AFLDS.IDS = AFLD.ID 
-            LEFT JOIN BANK_NAME BN ON BN.SR_IDS = AFL.BANK_ID 
-            LEFT JOIN AB_LOOKUP_DETAIL ALD ON ALD.DET_ID=AFLD.FACILITIES_ID AND LOOKUP_ID = '032' 
-            LEFT JOIN AB_FACILITIES_LETTER_DET AFA ON AFA.IDS=AFLD.ID AND AFA.IMAGE_TYPE='FACILITIES ACCOUNT NUMBER' 
-            LEFT JOIN AB_SETUP_REGISTRATION ASB ON ASB.SR_ID=AFA.ACCOUNT_NO AND ASB.REG_TYPE IN ('BANK LOV','624') 
-            LEFT JOIN AB_SETUP_REGISTRATION ASCM ON ASCM.SR_ID=ASB.COMPANY_ID AND ASCM.REG_TYPE='COMPANY' 
-            WHERE AFL.FACILITIES_TYPE = 'FACILITIES MAST' 
-            AND AFL.ORG_ID = :GV_ORG_ID 
-            AND AFL.STATUS = 'Y' 
-            GROUP BY AFL.ID , BN.REG_NAME , AFLD.ID , AFL.BANK_BRANCH, AFLD.FOL_HINT, ALD.LOOKUP_DET_NAME , 
-                     AFA.ID , AFA.ACCOUNT_NO , 
-                     CASE WHEN ASB.REG_CODE IS NULL THEN ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME 
-                          ELSE ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END , 
-                     ASCM.REG_NAME , AFLD.BG_SECURITY
+            SELECT 
+                AFL.ID FOL_ID,
+                BN.REG_NAME BANK_NAME ,  
+                AFLD.FOL_HINT,
+                AFLD.ID FOLD_ID,
+                AFLD.BG_SECURITY,
+                AFLD.CASH_MARGIN,
+                AFL.BANK_BRANCH,
+                AFLD.FACILITIES_ID,
+                ALD.LOOKUP_DET_NAME FACILITIES_NAME,
+                AFA.ID ACCOUNT_ID,
+                AFA.ACCOUNT_NO ACCOUNT_NOO,
+                CASE WHEN ASB.REG_CODE IS NULL THEN ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME ELSE ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END ACCOUNT_NAME,
+                ASCM.REG_NAME COMPANY_NAME
+            FROM 
+                AB_FACILITIES_LETTER AFL
+            LEFT JOIN AB_FACILITIES_LETTER_DET AFLD ON AFLD.MAST_ID = AFL.ID
+            LEFT JOIN AB_FACILITIES_LETTER_DET AFLDS ON AFLDS.IDS = AFLD.ID
+            LEFT JOIN BANK_NAME BN ON BN.SR_IDS = AFL.BANK_ID
+            LEFT JOIN AB_LOOKUP_DETAIL ALD ON ALD.DET_ID=AFLD.FACILITIES_ID AND LOOKUP_ID = '032'
+            LEFT JOIN AB_FACILITIES_LETTER_DET AFA ON AFA.IDS=AFLD.ID AND AFA.IMAGE_TYPE='FACILITIES ACCOUNT NUMBER'
+            LEFT JOIN AB_SETUP_REGISTRATION ASB ON ASB.SR_ID=AFA.ACCOUNT_NO AND ASB.REG_TYPE IN ('BANK LOV','624')
+            LEFT JOIN AB_SETUP_REGISTRATION ASCM ON ASCM.SR_ID=ASB.COMPANY_ID AND ASCM.REG_TYPE='COMPANY'
+            WHERE 
+                AFL.FACILITIES_TYPE = 'FACILITIES MAST'
+            AND AFL.ORG_ID = :GV_ORG_ID
+            AND AFL.STATUS = 'Y'
+            AND AFLD.FACILITIES_ID <> 538
+            GROUP BY
+                AFL.ID ,
+                BN.REG_NAME ,   
+                AFLD.ID ,
+                AFL.BANK_BRANCH,
+                AFLD.FOL_HINT,
+                ALD.LOOKUP_DET_NAME ,
+                AFA.ID ,
+                AFA.ACCOUNT_NO ,
+                CASE WHEN ASB.REG_CODE IS NULL THEN ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME ELSE ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END ,
+                ASCM.REG_NAME ,
+                AFLD.BG_SECURITY,
+                AFLD.FACILITIES_ID,
+                AFLD.CASH_MARGIN
         ),
         FUND_REQ_DETAIL AS (
-            SELECT DET_ID, IDS, SUM(BALANCE) REQ_AMT 
-            FROM AB_PO_DEMAND_REQ_DET 
-            WHERE ORG_ID=:GV_ORG_ID 
-            AND DET_STATUS='CREATED' 
-            AND STATUS='Y' 
-            GROUP BY IDS, DET_ID
+            SELECT 
+                DET_ID,
+                IDS,
+                SUM(BALANCE) REQ_AMT
+            FROM
+                AB_PO_DEMAND_REQ_DET
+            WHERE 
+                ORG_ID=:GV_ORG_ID
+            AND DET_STATUS='CREATED'
+            AND STATUS='Y'
+            GROUP BY
+                IDS,
+                DET_ID
         ),
         DEMAND_REQUEST_BG AS(
-            SELECT TR.TR_ID, TRD_ID, TR_IDS, TRD.TRD_AMOUNT 
-            FROM AB_FIN_TRANSACTION TR 
-            JOIN AB_FIN_TRANSACTION_DET TRD ON TRD.TR_ID=TR.TR_ID AND TRD.STATUS='Y' 
-            WHERE TR.TR_TYPE='623' 
-            AND TR.ORG_ID=:GV_ORG_ID 
+            SELECT
+                TR.TR_ID,
+                TRD_ID,
+                TR_IDS,
+                TRD.TRD_AMOUNT
+            FROM
+                AB_FIN_TRANSACTION TR
+            JOIN AB_FIN_TRANSACTION_DET TRD ON TRD.TR_ID=TR.TR_ID AND TRD.STATUS='Y'
+            WHERE
+                TR.TR_TYPE='623'
+            AND TR.ORG_ID=:GV_ORG_ID
             AND TR.STATUS='Y'
         ),
         APPROVE_AMOUNT AS (
-            SELECT TRD.TRD_ID, BG.TR_IDS 
-            FROM AB_FIN_TRANSACTION_DET TRD 
-            JOIN DEMAND_REQUEST_BG BG ON BG.TRD_ID=TRD.TRD_IDS 
-            WHERE TRD.TRD_TYPE='632' 
-            AND TRD.ORG_ID=:GV_ORG_ID 
+            SELECT
+                TRD.TRD_ID,
+                BG.TR_IDS
+            FROM
+                AB_FIN_TRANSACTION_DET TRD 
+            JOIN DEMAND_REQUEST_BG BG ON BG.TRD_ID=TRD.TRD_IDS
+            WHERE
+                TRD.TRD_TYPE='632'
+            AND TRD.ORG_ID=:GV_ORG_ID
             AND TRD.STATUS='Y'
         ),
         DEMAND_VOUCHER AS(
-            SELECT APP.TR_IDS LU_ID, NVL(SUM(DR_AMOUNT),0) DR_AMOUNT 
-            FROM AB_FIN_TRANSACTION_DET TRD 
-            JOIN APPROVE_AMOUNT APP ON APP.TRD_ID=TRD.TRD_IDS 
-            WHERE TRD.TRD_TYPE='628' 
-            AND TRD.ORG_ID=:GV_ORG_ID 
-            AND TRD.STATUS='Y' 
-            AND DR_AMOUNT IS NOT NULL 
-            GROUP BY APP.TR_IDS
+            SELECT
+                APP.TR_IDS LU_ID,
+                NVL(SUM(DR_AMOUNT),0) DR_AMOUNT
+            FROM
+                AB_FIN_TRANSACTION_DET TRD 
+            JOIN APPROVE_AMOUNT APP ON APP.TRD_ID=TRD.TRD_IDS
+            WHERE
+                TRD.TRD_TYPE='628'
+            AND TRD.ORG_ID=:GV_ORG_ID
+            AND TRD.STATUS='Y'
+            AND DR_AMOUNT IS NOT NULL
+            GROUP BY 
+                APP.TR_IDS 
         ),
         LU_MATURITY AS(
-            SELECT AFL.FL_IDS 
-            FROM AB_FACILITIES_LETTER AFL 
-            WHERE AFL.FACILITIES_TYPE = 'LU MATURITY' 
-            AND AFL.ORG_ID = :GV_ORG_ID 
+            SELECT   
+                AFL.FL_IDS
+            FROM 
+                AB_FACILITIES_LETTER AFL
+            WHERE 
+                AFL.FACILITIES_TYPE = 'LU MATURITY'
+            AND AFL.ORG_ID = :GV_ORG_ID
             AND AFL.STATUS = 'Y'
         ),
         SECURTITY_CHEQUE_POL_NO AS (
-            SELECT ACB.POL_NO_BOX, 'POL#-(' || ACB.POL_NO_BOX || ')-Chq:#-' || BCA.CHEQUE_NO || '-' || ITM.ITEM_NAME || ' (' || ITM.PACKING_SIZE || ' ' || ITM.UNIT || ' ' || ITM.PACKING || ')' AS POL_INFO, ACB.CB_ID AS POL_ID 
-            FROM AB_CHEQUE_BOOK ACB 
-            LEFT JOIN AB_CHEQUE_BOOK BCA ON BCA.CB_ID = ACB.CB_IDS 
-            LEFT JOIN AB_ITEMS_MASTER ITM ON ITM.ITEM_ID = ACB.PRODUCT_ID AND ITM.STATUS = 'Y' 
-            WHERE ACB.ORG_ID = :GV_ORG_ID 
-            AND ACB.CB_TYPE = 'SECURITY CHEQUE' 
-            AND ACB.STATUS ='Y' 
+            SELECT 
+                ACB.POL_NO_BOX,
+                'POL#-(' || ACB.POL_NO_BOX || ')-Chq:#-' || BCA.CHEQUE_NO || '-' || ITM.ITEM_NAME || ' (' || ITM.PACKING_SIZE || ' ' || ITM.UNIT || ' ' || ITM.PACKING || ')' AS POL_INFO,
+                ACB.CB_ID AS POL_ID
+            FROM AB_CHEQUE_BOOK ACB
+            LEFT JOIN AB_CHEQUE_BOOK BCA ON BCA.CB_ID = ACB.CB_IDS       
+            LEFT JOIN AB_ITEMS_MASTER ITM ON ITM.ITEM_ID = ACB.PRODUCT_ID AND ITM.STATUS = 'Y'
+            WHERE ACB.ORG_ID = :GV_ORG_ID
+            AND ACB.CB_TYPE = 'SECURITY CHEQUE'
+            AND ACB.STATUS ='Y'
             ORDER BY ACB.CB_ID DESC
         ),
         LIMIT_UTILIZATION AS(
-            SELECT AFL.ID, AFL.FACILITIES_ID, AFL.ACCOUNT_NO, AFL.FACILITIES_TYPE, AFL.STATUS, AFL.SUPPLIER_ID, 
-                   MAX(CASE WHEN ASR.SR_ID = AFL.SUPPLIER_ID AND ASR.REG_TYPE = 'VENDOR' THEN INITCAP(ASR.PARTY_NAME) ELSE NULL END) AS Supplier_Name, 
-                   AFL.BG_TYPE, AFL.AMOUNT, AFL.BG_ISSU_DATE, AFL.BG_MATURITY_DATE, AFL.BG_EXPIRE_DATE, 
-                   TRIM(TO_CHAR(AFL.BG_EXPIRE_DATE, 'DAY')) AS EXPIRE_DAY_NAME, 
-                   CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) THEN TRUNC(AFL.BG_EXPIRE_DATE) ELSE NULL END AS IS_EXPIRE_AFTER_TODAY,
-                   -- Add month field for grouping
-                   TRUNC(AFL.BG_EXPIRE_DATE, 'MONTH') AS MONTH_GROUP,
-                   TO_CHAR(AFL.BG_EXPIRE_DATE, 'Month-YYYY') AS MONTH_DISPLAY,
-                   AFL.EXPIRY_DAYS, AFL.CREDIT_DAYS, AFL.REMARKS, AFL.BG_NUMBER, AFL.AGENCY_ID, 
-                   MAX(CASE WHEN ASR.SR_ID = AFL.AGENCY_ID AND ASR.REG_TYPE = 'AGENCY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS Agency_Name, 
-                   MAX(CASE WHEN ASR.SR_ID = AFL.BEN_COMPANY_ID AND ASR.REG_TYPE = 'COMPANY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS BENEFICIAL_COMPANY1, 
-                   AFL.ORDER_PURPOSE, 
-                   MAX(CASE WHEN ALD.DET_ID = AFL.ORDER_PURPOSE THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS PURPOSE, 
-                   AFL.BG_CATEGORY_ID, 
-                   MAX(CASE WHEN ALD.DET_ID = AFL.BG_CATEGORY_ID THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS CATEGORY, 
-                   CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS MATURITY, 
-                   CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 1) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS TOMORROW, 
-                   CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT) 
-                        WHEN TRUNC(AFL.BG_EXPIRE_DATE) < TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT) 
-                        ELSE NULL END AS DAY_AFTER_TOMORROW, 
-                   CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS OVER_DUE, 
-                   'ATTACMENT' AS ATTACHMENT, AFL.MATURITY_TYPE, 
-                   CASE WHEN AFL.MATURITY_TYPE='FINANCIAL' AND TRUNC(AFL.BG_EXPIRE_DATE)=TRUNC(SYSDATE) AND AFL.AMOUNT-NVL(BG.TRD_AMOUNT,0) > 0 
-                        THEN 'FUNDS REQUISITION' ELSE NULL END AS FUNDS_REQUISITION, 
-                   INITCAP(AFL.CREATED_BY) || ' (' || TO_CHAR(AFL.CREATED_ON, 'DD-MON-YYYY HH:MIPM') || ')' AS CREATED_BY, 
-                   AFL.CREATED_BY AS CREATED_BYS, BG.TR_IDS REQ_IDS, LM.FL_IDS, AFL.POL_NO, POL.POL_INFO, POL.POL_NO_BOX, 
-                   NVL(FD.BG_SECURITY,0) AS Collateral , 
-                   NVL( TO_NUMBER(REGEXP_SUBSTR(FD.BG_SECURITY, '[0-9]+')), 0 ) AS BG_SECURITY_NUMBER, 
-                   INO.ITEM_NAME, NVL(INO.NET_AMOUNT,0) NET_AMOUNT, 
-                   (AFL.AMOUNT * NVL(TO_NUMBER(REGEXP_SUBSTR(FD.BG_SECURITY, '[0-9]+')), 0) / 100) AS CASH_MARGIN_IN_BANK, 
-                   AFL.AMOUNT - (AFL.AMOUNT * NVL(TO_NUMBER(REGEXP_SUBSTR(FD.BG_SECURITY, '[0-9]+')), 0) / 100) AS REMAINING_PAYABLE 
-            FROM AB_FACILITIES_LETTER AFL 
+            SELECT   
+                AFL.ID,
+                AFL.FACILITIES_ID,
+                AFL.ACCOUNT_NO,
+                AFL.FACILITIES_TYPE,
+                AFL.STATUS,
+                AFL.SUPPLIER_ID,
+                MAX(CASE WHEN ASR.SR_ID = AFL.SUPPLIER_ID AND ASR.REG_TYPE = 'VENDOR' THEN INITCAP(ASR.PARTY_NAME) ELSE NULL END) AS Supplier_Name,
+                AFL.BG_TYPE,
+                AFL.AMOUNT,
+                AFL.BG_ISSU_DATE,
+                AFL.BG_MATURITY_DATE,
+                AFL.BG_EXPIRE_DATE,
+                TRIM(TO_CHAR(AFL.BG_EXPIRE_DATE, 'DAY')) AS EXPIRE_DAY_NAME,
+                CASE 
+                WHEN TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) 
+                THEN TRUNC(AFL.BG_EXPIRE_DATE) 
+                ELSE NULL 
+                END AS IS_EXPIRE_AFTER_TODAY,
+                AFL.EXPIRY_DAYS,
+                AFL.CREDIT_DAYS,
+                AFL.REMARKS,
+                AFL.BG_NUMBER,
+                AFL.AGENCY_ID,
+                MAX(CASE WHEN ASR.SR_ID = AFL.AGENCY_ID AND ASR.REG_TYPE = 'AGENCY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS Agency_Name,
+                MAX(CASE WHEN ASR.SR_ID = AFL.BEN_COMPANY_ID AND ASR.REG_TYPE = 'COMPANY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS BENEFICIAL_COMPANY1,
+                AFL.ORDER_PURPOSE,
+                MAX(CASE WHEN ALD.DET_ID = AFL.ORDER_PURPOSE THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS PURPOSE,
+                AFL.BG_CATEGORY_ID,
+                MAX(CASE WHEN ALD.DET_ID = AFL.BG_CATEGORY_ID THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS CATEGORY,
+                CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS MATURITY, 
+                CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 1) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS TOMORROW,
+                CASE 
+                    WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT)
+                    WHEN TRUNC(AFL.BG_EXPIRE_DATE) < TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT)
+                ELSE NULL
+                END AS DAY_AFTER_TOMORROW, 
+                CASE 
+                    WHEN TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT)
+                ELSE NULL
+                END AS OVER_DUE,   
+                'ATTACMENT' AS ATTACHMENT,
+                AFL.MATURITY_TYPE,
+                CASE WHEN AFL.MATURITY_TYPE='FINANCIAL' AND 
+                TRUNC(AFL.BG_EXPIRE_DATE)=TRUNC(SYSDATE) AND AFL.AMOUNT-NVL(BG.TRD_AMOUNT,0) > 0 THEN 'FUNDS REQUISITION' ELSE NULL END AS FUNDS_REQUISITION,
+                INITCAP(AFL.CREATED_BY) || ' (' || TO_CHAR(AFL.CREATED_ON, 'DD-MON-YYYY HH:MIPM') || ')' AS CREATED_BY,
+                AFL.CREATED_BY AS CREATED_BYS,
+                BG.TR_IDS REQ_IDS,
+                LM.FL_IDS,
+                AFL.POL_NO,
+                POL.POL_INFO,
+                POL.POL_NO_BOX,
+                INO.ITEM_NAME,
+                NVL(INO.NET_AMOUNT,0) NET_AMOUNT,
+                -- Add month field for grouping
+                TRUNC(AFL.BG_EXPIRE_DATE, 'MONTH') AS MONTH_GROUP,
+                TO_CHAR(AFL.BG_EXPIRE_DATE, 'Month-YYYY') AS MONTH_DISPLAY
+            FROM 
+                AB_FACILITIES_LETTER AFL  
             LEFT JOIN AB_SETUP_REGISTRATION ASR ON ASR.SR_ID IN (AFL.SUPPLIER_ID, AFL.AGENCY_ID,AFL.BEN_COMPANY_ID) 
             LEFT JOIN AB_LOOKUP_DETAIL ALD ON ALD.DET_ID IN (AFL.BG_CATEGORY_ID, AFL.ORDER_PURPOSE, AFL.BG_NATURE, AFL.FACILITIES_ID) 
-            LEFT JOIN DEMAND_REQUEST_BG BG ON BG.TR_IDS=AFL.ID 
-            LEFT JOIN LU_MATURITY LM ON LM.FL_IDS=AFL.ID 
+            LEFT JOIN DEMAND_REQUEST_BG BG ON BG.TR_IDS=AFL.ID
+            LEFT JOIN LU_MATURITY LM ON LM.FL_IDS=AFL.ID
             LEFT JOIN SECURTITY_CHEQUE_POL_NO POL ON POL.POL_ID= AFL.POL_NO 
-            LEFT JOIN COLLETERAL FD ON FD.FOLD_ID = AFL.ID 
-            LEFT JOIN INSTROMENT_INFO INO ON INO.INSTRUMENT_NOO = AFL.ID 
-            WHERE AFL.FACILITIES_TYPE = 'LIMIT UTILIZATION' 
-            AND AFL.ORG_ID = NVL(:GV_ORG_ID,AFL.ORG_ID) 
-            AND AFL.STATUS = 'Y' 
-            AND TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) 
-            AND TRUNC(AFL.BG_ISSU_DATE) BETWEEN NVL(TO_DATE(:P1033_FROM_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) ) 
-            AND NVL(TO_DATE(:P1033_TO_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) ) 
-            GROUP BY AFL.ID, AFL.FACILITIES_TYPE, AFL.ACCOUNT_NO, AFL.STATUS, AFL.BG_NUMBER, AFL.SUPPLIER_ID, AFL.BG_TYPE, 
-                     AFL.FACILITIES_ID, AFL.AMOUNT, AFL.EXPIRY_DAYS, AFL.CREDIT_DAYS, AFL.MATURITY_TYPE, 
-                     AFL.BG_ISSU_DATE, AFL.BG_EXPIRE_DATE, AFL.AGENCY_ID, AFL.ORDER_PURPOSE, AFL.BG_CATEGORY_ID, 
-                     AFL.CREATED_ON, AFL.CREATED_BY, AFL.MATURITY, AFL.REMARKS, AFL.TOMORROW, AFL.DAY_AFTER_TOMORROW, 
-                     AFL.OVER_DUE, AFL.BG_MATURITY_DATE, NVL(BG.TRD_AMOUNT,0), BG.TRD_AMOUNT, BG.TR_IDS , LM.FL_IDS, 
-                     FD.BG_SECURITY, AFL.POL_NO, POL.POL_INFO, POL.POL_NO_BOX, INO.ITEM_NAME, INO.NET_AMOUNT,
-                     TRUNC(AFL.BG_EXPIRE_DATE, 'MONTH'), TO_CHAR(AFL.BG_EXPIRE_DATE, 'Month-YYYY')
+            LEFT JOIN INSTROMENT_INFO INO ON INO.INSTRUMENT_NOO = AFL.ID
+            WHERE 
+                AFL.FACILITIES_TYPE = 'LIMIT UTILIZATION'
+            AND AFL.ORG_ID = NVL(:GV_ORG_ID,AFL.ORG_ID)
+            AND AFL.STATUS = 'Y'
+            AND TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE)
+            AND TRUNC(AFL.BG_ISSU_DATE) BETWEEN NVL(TO_DATE(:P1033_FROM_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) ) AND NVL(TO_DATE(:P1033_TO_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) )
+            GROUP BY 
+                AFL.ID,
+                AFL.FACILITIES_TYPE,
+                AFL.ACCOUNT_NO,
+                AFL.STATUS,
+                AFL.BG_NUMBER,
+                AFL.SUPPLIER_ID,
+                AFL.BG_TYPE,
+                AFL.FACILITIES_ID,
+                AFL.AMOUNT,
+                AFL.EXPIRY_DAYS,
+                AFL.CREDIT_DAYS,
+                AFL.MATURITY_TYPE,
+                AFL.BG_ISSU_DATE,
+                AFL.BG_EXPIRE_DATE,
+                AFL.AGENCY_ID,
+                AFL.ORDER_PURPOSE,
+                AFL.BG_CATEGORY_ID,
+                AFL.CREATED_ON,
+                AFL.CREATED_BY,
+                AFL.MATURITY,
+                AFL.REMARKS,
+                AFL.TOMORROW,
+                AFL.DAY_AFTER_TOMORROW,
+                AFL.OVER_DUE,
+                AFL.BG_MATURITY_DATE,
+                NVL(BG.TRD_AMOUNT,0),
+                BG.TRD_AMOUNT,
+                BG.TR_IDS ,
+                LM.FL_IDS,
+                AFL.POL_NO,
+                POL.POL_INFO,
+                POL.POL_NO_BOX,
+                INO.ITEM_NAME,
+                INO.NET_AMOUNT,
+                TRUNC(AFL.BG_EXPIRE_DATE, 'MONTH'),
+                TO_CHAR(AFL.BG_EXPIRE_DATE, 'Month-YYYY')
         )
-        SELECT distinct LU.ID, LU.BG_TYPE, LU.AMOUNT AS PRODUCT_NET_AMOUNT, LU.BG_ISSU_DATE, LU.BG_EXPIRE_DATE, 
-               LU.EXPIRE_DAY_NAME, LU.IS_EXPIRE_AFTER_TODAY, LU.CREDIT_DAYS, LU.REMARKS, LU.BG_NUMBER, LU.Agency_Name, 
-               LU.BG_SECURITY_NUMBER, LU.ITEM_NAME AS PRODUCT_NAME, LU.NET_AMOUNT, LU.CASH_MARGIN_IN_BANK, LU.REMAINING_PAYABLE, 
-               FD.BANK_NAME, FD.FACILITIES_NAME, FD.COMPANY_NAME,
-               LU.MONTH_GROUP, LU.MONTH_DISPLAY
-        FROM LIMIT_UTILIZATION LU 
-        JOIN FOL_DETAIL FD ON FD.FOLD_ID=LU.FACILITIES_ID AND FD.ACCOUNT_ID=LU.ACCOUNT_NO 
-        LEFT JOIN APPROVE_AMOUNT AA ON AA.TR_IDS=LU.ID 
-        LEFT JOIN DEMAND_VOUCHER VOU ON VOU.LU_ID=LU.ID 
-        ORDER BY LU.MONTH_GROUP , LU.ID DESC
+        SELECT 
+            distinct 
+            LU.ID,
+            LU.BG_TYPE,
+            LU.AMOUNT AS PRODUCT_NET_AMOUNT,
+            LU.BG_ISSU_DATE,
+            LU.BG_EXPIRE_DATE,
+            LU.EXPIRE_DAY_NAME,
+            LU.IS_EXPIRE_AFTER_TODAY,
+            LU.CREDIT_DAYS,
+            LU.REMARKS,
+            LU.BG_NUMBER,
+            LU.Agency_Name,
+            LU.ITEM_NAME AS PRODUCT_NAME,
+            LU.NET_AMOUNT,
+            FD.FOL_HINT,
+            FD.BANK_NAME,
+            FD.FACILITIES_NAME,
+            FD.COMPANY_NAME,
+            FD.CASH_MARGIN AS BG_CASH_MARGIN,
+            NVL(TO_NUMBER(REGEXP_SUBSTR(FD.CASH_MARGIN, '[0-9]+')), 0) AS CASH_MARGIN,
+            (LU.AMOUNT * NVL(TO_NUMBER(REGEXP_SUBSTR(FD.CASH_MARGIN, '[0-9]+')), 0) / 100) AS CASH_MARGIN_IN_BANK,
+            LU.AMOUNT - (LU.AMOUNT * NVL(TO_NUMBER(REGEXP_SUBSTR(FD.CASH_MARGIN, '[0-9]+')), 0) / 100) AS REMAINING_PAYABLE,
+            LU.MONTH_GROUP,
+            LU.MONTH_DISPLAY
+            
+        FROM
+            LIMIT_UTILIZATION LU
+        JOIN FOL_DETAIL FD ON FD.FOLD_ID=LU.FACILITIES_ID AND FD.ACCOUNT_ID=LU.ACCOUNT_NO
+        LEFT JOIN APPROVE_AMOUNT AA ON AA.TR_IDS=LU.ID
+        LEFT JOIN DEMAND_VOUCHER VOU ON VOU.LU_ID=LU.ID
+        ORDER BY
+            LU.MONTH_GROUP, LU.ID DESC
     ) LOOP
         -- ⭐ NEW CATEGORY STARTS
         IF v_prev_category IS NULL OR v_prev_category <> rec.MONTH_GROUP THEN
             -- If not the first category, output summary row for previous category
             IF v_prev_category IS NOT NULL THEN
                 htp.p('<tr class="total-row">' ||
-                      '<td colspan="10" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total:</b></td>' ||
+                      '<td colspan="12" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total:</b></td>' ||
                       '<td style="padding:4px; text-align:right; border:1px solid #ccc;">-</td>' ||
                       '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_cash_margin_sum,'999G999G999G990D00') || '</td>' ||
                       '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_remaining_payable_sum,'999G999G999G990D00') || '</td>' ||
@@ -266,7 +420,45 @@ BEGIN
                   '</div>');
             
             -- Start new table for category
-            htp.p('<table style="width:100%; border-collapse:collapse; margin-bottom:15px;"> <thead> <colgroup> <col style="width:10%;"> <col style="width:10%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> <col style="width:8%;"> </colgroup> <tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;"> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Facilities Name</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bank Name</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Product Name</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Company Name</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Agency</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Number</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Product Net Amount</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Issu Date</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Expire Date</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Days</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cash Margin %</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cash Margin In Bank</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remaining Payable</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Credit Days</th> <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remarks</th> </tr> </thead> <tbody>');
+            htp.p('<table style="width:100%; border-collapse:collapse; margin-bottom:15px;"> 
+            <thead> <colgroup>
+             <col style="width:10%;">
+             <col style="width:10%;">
+             <col style="width:7%;">
+             <col style="width:8%;"> 
+             <col style="width:8%;">
+             <col style="width:8%;">
+             <col style="width:5%;">
+             <col style="width:8%;">
+             <col style="width:8%;">
+             <col style="width:8%;">
+             <col style="width:8%;"> 
+             <col style="width:8%;"> 
+             <col style="width:8%;">
+             <col style="width:8%;">
+             <col style="width:8%;">
+             <col style="width:8%;"> 
+             <col style="width:8%;"> 
+             </colgroup> <tr style="background-color:rgba(146,208,80,0.237);
+                    font-weight:bold; border:1px solid #000;"> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Facilities Name</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">FOL HINT</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bank Name</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Product Name</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Company Name</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Agency</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Type</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Number</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Product Net Amount</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Issu Date</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Bg Expire Date</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Days</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cash Margin %</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cash Margin In Bank</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remaining Payable</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Credit Days</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remarks</th> 
+                    </tr> </thead> <tbody>');
             
             v_prev_category := rec.MONTH_GROUP;
         END IF;
@@ -275,14 +467,33 @@ BEGIN
         v_cash_margin_sum := v_cash_margin_sum + NVL(rec.CASH_MARGIN_IN_BANK, 0);
         v_remaining_payable_sum := v_remaining_payable_sum + NVL(rec.REMAINING_PAYABLE, 0);
         
-        -- ⭐ ITEM ROW
-        htp.p(' <tr> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.FACILITIES_NAME ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BANK_NAME ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.PRODUCT_NAME ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.COMPANY_NAME ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.Agency_Name ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BG_NUMBER ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.PRODUCT_NET_AMOUNT,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.BG_ISSU_DATE,'DD-MON-YYYY') ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.BG_EXPIRE_DATE,'DD-MON-YYYY') ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.EXPIRE_DAY_NAME ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BG_SECURITY_NUMBER ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.CASH_MARGIN_IN_BANK,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.REMAINING_PAYABLE,'999G999G999G990D00') ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.CREDIT_DAYS ||'</td> <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.REMARKS ||'</td> </tr>');
+        -- ⭐ ITEM ROW - Fixed the HTML structure
+        htp.p(' 
+        <tr> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.FACILITIES_NAME ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.FOL_HINT ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BANK_NAME ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.PRODUCT_NAME ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.COMPANY_NAME ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.Agency_Name ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BG_TYPE ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.BG_NUMBER ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.PRODUCT_NET_AMOUNT,'999G999G999G990D00') ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.BG_ISSU_DATE,'DD-MON-YYYY') ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.BG_EXPIRE_DATE,'DD-MON-YYYY') ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.EXPIRE_DAY_NAME ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.CASH_MARGIN ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.CASH_MARGIN_IN_BANK,'999G999G999G990D00') ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| TO_CHAR(rec.REMAINING_PAYABLE,'999G999G999G990D00') ||'</td>
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.CREDIT_DAYS ||'</td> 
+        <td style="padding:4px; text-align:center; border:1px solid #ccc;">'|| rec.REMARKS ||'</td> 
+        </tr>');
     END LOOP;
     
     -- Output summary for last category
     IF v_prev_category IS NOT NULL THEN
         htp.p('<tr class="total-row">' ||
-              '<td colspan="10" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total:</b></td>' ||
+              '<td colspan="12" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>Total:</b></td>' ||
               '<td style="padding:4px; text-align:right; border:1px solid #ccc;">-</td>' ||
               '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_cash_margin_sum,'999G999G999G990D00') || '</td>' ||
               '<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_remaining_payable_sum,'999G999G999G990D00') || '</td>' ||
