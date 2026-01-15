@@ -1,0 +1,433 @@
+DECLARE
+  v_tax_liability NUMBER := 0;
+  v_inv_net_amount NUMBER := 0;
+  v_inv_bags NUMBER := 0;
+  v_cprn_payments NUMBER := 0;
+  V_AGENCY_NAME  varchar2(200);
+   v_last_payment_mode VARCHAR2(200) := NULL;
+    v_header_printed BOOLEAN := FALSE;
+    v_has_records BOOLEAN := FALSE; --Add a flag variable
+     v_group_total NUMBER := 0;
+     v_payment_mode_sum NUMBER := 0; -- Variable to accumulate sum of closing balances for current payment mode
+     v_dr_amount_sum NUMBER := 0; -- Variable to accumulate sum of Dr Amount for current payment mode
+     v_cr_amount_sum NUMBER := 0; -- Variable to accumulate sum of Cr Amount for current payment mode
+     v_calculated_balance NUMBER := 0; -- Variable to store Dr Amount sum - Cr Amount sum
+     -- New variables for grand totals
+     v_grand_dr_total NUMBER := 0; -- Variable to accumulate sum of all Dr Amount
+     v_grand_cr_total NUMBER := 0; -- Variable to accumulate sum of all Cr Amount
+     v_grand_balance NUMBER := 0; -- Variable to store grand Dr Amount sum - grand Cr Amount sum
+BEGIN
+BEGIN
+    SELECT 
+      NVL(ACCOUNT_TITLE, ' ') || ' - ' || NVL(GL_CODE, ' ')
+    INTO 
+      V_AGENCY_NAME
+    FROM 
+      AB_FIN_COA
+    WHERE 
+      COA_ID = :P63_AGENCY
+      AND ROWNUM = 1;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      V_AGENCY_NAME := NULL;
+  END;
+
+  -- JavaScript for printing and adjusting column widths
+ htp.p('<script>
+        function adjustColumnWidth() {
+          var table = document.querySelector("table");
+          var itemNameColumnIndex = 1; // Index for ITEM NAME column
+          var maxWidth = 0;
+          var rows = table.querySelectorAll("tbody tr");
+          
+          rows.forEach(function(row) {
+            var itemNameCell = row.cells[itemNameColumnIndex];
+            if (itemNameCell) {
+              var cellWidth = itemNameCell.scrollWidth;
+              if (cellWidth > maxWidth) {
+                maxWidth = cellWidth;
+              }
+            }
+          });
+          
+          var header = table.querySelector("thead th.item-name-column");
+          if (header) {
+            header.style.width = maxWidth + "px";
+          }
+          
+          var dataCells = table.querySelectorAll("tbody td.item-name-column");
+          dataCells.forEach(function(cell) {
+            cell.style.width = maxWidth + "px";
+          });
+        }
+       
+        function printDiv(printpage) {
+          adjustColumnWidth();
+          var headstr = "<html><head><title></title><style>";
+          headstr += "@page { size: A4 landscape; margin: 10mm; }";
+          headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
+          headstr += ".button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }";
+          headstr += ".button1 { font-size: 16px; }";
+          headstr += "table { border-collapse: collapse; width: 100%; margin: 0; padding: 0; }";
+          headstr += "th, td { text-align: left; padding: 3px; font-size: 10px; line-height: 1.1; }";
+          headstr += "th { background-color:#B4C6E7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += ".separator { border-top: 1px solid black; }";
+          headstr += "h3 { margin: 0; display: flex; align-items: center; justify-content: center; background-color: #000080; color:white; border: 1px solid black; -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += "@media print { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
+          headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }";
+          headstr += "#div_print1 { margin: 0; padding: 0; }";
+          headstr += ".grand-total { font-weight: bold; background-color: ##B4C6E7; border-top: 2px solid black; }";
+          headstr += "</style></head><body>";
+          var footstr = "</body></html>";
+          var newstr = document.getElementById(printpage).innerHTML;
+          var oldstr = document.body.innerHTML;
+          document.body.innerHTML = headstr + newstr + footstr;
+          window.print();
+          document.body.innerHTML = oldstr;
+          return false;
+        }
+      </script>');
+
+  -- Print buttons for both reports
+  htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>');
+
+  -- Start merged report container
+  htp.p('<div id="all_reports">');
+
+  -- Daily Stock Report Section
+--   htp.p('<div class="header" style="display: flex; justify-content: space-between; margin-bottom: 20px; ">');
+--     htp.p('<h2>IBRAHIM TRADERS</h2>');
+--     htp.p('<img src="#APP_FILES#WhatsApp Image 2025-08-21 at 11.35.38 AM.jpeg" alt=""
+--      style="max-width:100%; width:200px; height:auto;">');
+--     htp.p('</div>');
+
+-------    item name ---------
+
+htp.p('
+<div style="font-family: Arial, sans-serif; font-size: 13px; padding: 6px; ">
+   <span style="margin-right: 30px;"><b>Agency Name:</b> '|| V_AGENCY_NAME ||'</span>
+   <span style="margin-right: 30px;"><b>From Date:</b> '|| :P63_FROM_DATE ||'</span>
+   <span style="margin-right: 30px;"><b>To Date:</b> '|| :P63_TO_DATE ||'</span>
+  <span><b>Print By:</b> '|| :APP_USER  ||'</span>
+ 
+</div>');
+
+  htp.p('<h3>Agency Wise Ledger</h3>');
+
+  -- Cursor to fetch actual records — you must insert your real query here
+  FOR rec IN (
+            WITH OPENING_BALANCE_VOUCHER AS (
+            SELECT 
+                        TRD_ID, 
+                        COA_IDD,
+                        TRD_DATE
+            FROM 
+                          AB_FIN_TRANSACTION TR
+                JOIN AB_FIN_TRANSACTION_DET TRD  ON TRD.TR_ID = TR.TR_ID  AND TRD.STATUS = 'Y'
+            WHERE 
+                         TRD_TYPE = 635
+                AND VOUCHER_TYPE_ID = 610
+                AND TR.STATUS = 'Y'
+                AND TR.ORG_ID = :GV_ORG_ID
+)
+,OPENING_PAYMENT_MODE AS (
+            SELECT
+                        OBV.TRD_DATE TRANSACTION_DATE,
+                        TO_NUMBER(:P63_AGENCY) ACCOUNT_ID,
+                        (SELECT ACCOUNT_TITLE || '-' || GL_CODE FROM AB_FIN_COA COA WHERE COA_ID = :P63_AGENCY  AND COA.STATUS = 'Y') ACCOUNT_TITLE,
+                        LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                        TRANSCATION_TYPE_IDD PAYMENT_MODE_ID,
+                        NVL(SUM(OBT.DR_AMOUNT),0) - NVL(SUM(OBT.CR_AMOUNT),0) OPENING_BALANCE
+            FROM 
+                               AB_FIN_TRANSACTION_DET OBT
+                     JOIN OPENING_BALANCE_VOUCHER OBV  ON OBV.TRD_ID = OBT.TRD_IDS
+            LEFT JOIN AB_LOOKUP_DETAIL LD ON LD.DET_ID = OBT.TRANSCATION_TYPE_IDD AND LD.STATUS='Y'
+            WHERE 
+                         OBT.TRD_TYPE = 802
+               AND  
+                OBT.STATUS = 'Y'
+                AND  OBT.ORG_ID = :GV_ORG_ID
+                AND OBV.COA_IDD = NVL(:P63_AGENCY, OBV.COA_IDD)
+              AND TRANSCATION_TYPE_IDD  = NVL(:P63_PAYMENT_MODE, TRANSCATION_TYPE_IDD)    
+            GROUP BY
+                        TRANSCATION_TYPE_IDD, 
+                        OBV.TRD_DATE,
+                        LD.LOOKUP_DET_NAME 
+)
+,OPENING_BALANCE_BEFORE AS(
+            SELECT
+                        TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY') - 1  TRANSACTION_DATE,
+                        ACCOUNT_ID,
+                        ACCOUNT_TITLE,
+                        LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                        PAYMENT_MODE_ID,
+                        NVL(SUM(DR_AMOUNT),0)  -  NVL(SUM(CR_AMOUNT),0) OPENING_BALANCE
+            FROM
+                             TABLE(AB_FINANCE_DETAIL_PKG.AGENCY_WISE_LEDGER(:GV_ORG_ID)) AL
+            LEFT JOIN AB_LOOKUP_DETAIL LD ON LD.DET_ID = AL.PAYMENT_MODE_ID
+            WHERE 
+                            AL.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
+                      AND AL.PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, AL.PAYMENT_MODE_ID)           
+
+
+                   AND TRUNC(TRANSACTION_DATE) < TO_DATE(:P63_FROM_DATE, 'DD-MON-YYYY')
+            GROUP BY
+                        ACCOUNT_ID,
+                        ACCOUNT_TITLE,
+                        LD.LOOKUP_DET_NAME,
+                        PAYMENT_MODE_ID
+    UNION ALL
+            SELECT
+                        TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY') - 1  TRANSACTION_DATE,
+                        NULL ACCOUNT_ID,
+                        NULL ACCOUNT_TITLE,
+                        NULL PAYEMENT_MODE,
+                        NULL PAYMENT_MODE_ID,
+                        0 OPENING_BALANCE
+                FROM 
+                        DUAL
+            WHERE 
+                    NOT EXISTS (SELECT 1 FROM TABLE(AB_FINANCE_DETAIL_PKG.AGENCY_WISE_LEDGER(:GV_ORG_ID)) C 
+                 WHERE 
+                              C.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
+                  AND PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, PAYMENT_MODE_ID)               
+                    AND TRUNC(TRANSACTION_DATE) < TO_DATE(:P63_FROM_DATE, 'DD-MON-YYYY')
+                    )  
+)
+,TOTAL_OPENING_BALANCE_BEFORE AS(
+           SELECT
+                    MAX(TRANSACTION_DATE) TRANSACTION_DATE,
+                    ACCOUNT_ID,
+                    ACCOUNT_TITLE,
+                    PAYEMENT_MODE,
+                    PAYMENT_MODE_ID,
+                    NVL(SUM(OPENING_BALANCE),0)    OPENING_BALANCE
+           FROM(
+            SELECT
+                        TRANSACTION_DATE,
+                        ACCOUNT_ID,
+                        ACCOUNT_TITLE,
+                        PAYEMENT_MODE,
+                        PAYMENT_MODE_ID,
+                        NVL(OPENING_BALANCE,0) OPENING_BALANCE
+            FROM
+                      OPENING_PAYMENT_MODE
+            WHERE
+                     TRUNC(TRANSACTION_DATE) < TO_DATE(:P63_FROM_DATE, 'DD-MON-YYYY')
+
+            UNION ALL
+            SELECT
+                        TRANSACTION_DATE,
+                        ACCOUNT_ID,
+                        ACCOUNT_TITLE,
+                        PAYEMENT_MODE,
+                        PAYMENT_MODE_ID,
+                        NVL(OPENING_BALANCE,0) OPENING_BALANCE 
+            FROM
+                     OPENING_BALANCE_BEFORE
+)C
+        GROUP BY
+                    ACCOUNT_ID,
+                    ACCOUNT_TITLE,
+                    PAYEMENT_MODE,
+                    PAYMENT_MODE_ID
+)
+,COMBINED AS (
+            SELECT
+                    NULL VOUCHER_NO,
+                    NULL TRANSCATION_IDD,
+                    'Opening Balance' VOUCHER_NAME,
+                    OBV.TRANSACTION_DATE,
+                    TO_NUMBER(:P63_AGENCY) COA_ID,
+                    (SELECT COA.ACCOUNT_TITLE || ' - ' || COA.GL_CODE FROM AB_FIN_COA COA WHERE COA_ID = :P63_AGENCY  AND COA.STATUS = 'Y') ACCOUNT_TITLE,
+                    'OBV Balance' NARRATIONS,
+                    CASE WHEN OBV.OPENING_BALANCE > 0 THEN OBV.OPENING_BALANCE ELSE NULL END DR_AMOUNT,
+                    CASE WHEN OBV.OPENING_BALANCE < 0 THEN ABS(OBV.OPENING_BALANCE) ELSE NULL END CR_AMOUNT,
+                    LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                    OBV.PAYMENT_MODE_ID,
+                    0 SORT_ORDER,
+                    OBV.OPENING_BALANCE BALANCE
+            FROM 
+                         OPENING_PAYMENT_MODE OBV
+                 JOIN AB_LOOKUP_DETAIL LD  ON LD.DET_ID = OBV.PAYMENT_MODE_ID AND LD.STATUS='Y'
+            LEFT JOIN TOTAL_OPENING_BALANCE_BEFORE TOB ON TOB.ACCOUNT_ID=OBV.ACCOUNT_ID
+            WHERE
+                         TRUNC(OBV.TRANSACTION_DATE)  BETWEEN NVL(TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY'), TRUNC(OBV.TRANSACTION_DATE)) 
+                AND NVL(TO_DATE(:P63_TO_DATE,'DD-MON-YYYY'), TRUNC(OBV.TRANSACTION_DATE))
+                AND TOB.ACCOUNT_ID IS NULL
+    UNION ALL
+        SELECT
+                    NULL VOUCHER_NO,
+                    NULL TRANSCATION_IDD,
+                    'Opening Balance' VOUCHER_NAME,
+                    TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY') - 1  TRANSACTION_DATE,
+                    ACCOUNT_ID,
+                    ACCOUNT_TITLE,
+                    'OBV Balance' NARRATIONS,
+                    CASE WHEN TOB.OPENING_BALANCE > 0 THEN TOB.OPENING_BALANCE ELSE NULL END DR_AMOUNT,
+                    CASE WHEN TOB.OPENING_BALANCE < 0 THEN ABS(TOB.OPENING_BALANCE) ELSE NULL END CR_AMOUNT,
+                    PAYEMENT_MODE,
+                    TOB.PAYMENT_MODE_ID,
+                    0 SORT_ORDER,
+                    TOB.OPENING_BALANCE BALANCE
+            FROM 
+                    TOTAL_OPENING_BALANCE_BEFORE TOB 
+            WHERE
+                         :P63_FROM_DATE IS NOT NULL
+                AND TOB.OPENING_BALANCE<>0  
+    UNION ALL
+        SELECT
+                TRANSCATION_ID VOUCHER_NO,
+                TRANSCATION_IDD,
+                VOUCHER_NAME,
+                TRANSACTION_DATE,
+                ACCOUNT_ID COA_ID,
+                ACCOUNT_TITLE,
+                NARRATIONS,
+                ROUND(DR_AMOUNT,2) DR_AMOUNT,
+                ROUND(CR_AMOUNT,2) CR_AMOUNT,
+                NVL(LD.LOOKUP_DET_NAME,LDS.LOOKUP_DET_NAME) PAYEMENT_MODE,
+                nvl(PAYMENT_MODE_ID,AL.TRANSCATION_TYPE_IDD) PAYMENT_MODE_ID,
+                1 SORT_ORDER,
+                 NVL(DR_AMOUNT,0) - NVL(CR_AMOUNT,0) BALANCE
+        FROM 
+                         TABLE(AB_FINANCE_DETAIL_PKG.AGENCY_WISE_LEDGER(:GV_ORG_ID)) AL
+        LEFT JOIN AB_LOOKUP_DETAIL LD  ON LD.DET_ID = AL.PAYMENT_MODE_ID
+       LEFT JOIN AB_LOOKUP_DETAIL LDS ON LDS.DET_ID = AL.TRANSCATION_TYPE_IDD
+
+        WHERE 
+                    AL.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
+           AND NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD)   = NVL(:P63_PAYMENT_MODE, NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD))
+          
+            AND TRUNC(TRANSACTION_DATE) BETWEEN NVL(TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY'), TRUNC(TRANSACTION_DATE)) 
+                       AND NVL(TO_DATE(:P63_TO_DATE,'DD-MON-YYYY'), TRUNC(TRANSACTION_DATE))
+)
+SELECT
+    VOUCHER_NO,
+    TRANSCATION_IDD,
+    VOUCHER_NAME,
+    TRANSACTION_DATE_DT,
+    TO_CHAR(TRANSACTION_DATE_DT,'DD-MON-YYYY') AS TRANSACTION_DATE,
+    COA_ID  ACCOUNT_ID,
+    ACCOUNT_TITLE,
+    NARRATIONS,
+    DR_AMOUNT,
+    CR_AMOUNT,
+    PAYEMENT_MODE,
+    PAYMENT_MODE_ID,
+    SORT_ORDER,
+    
+    SUM(  ROUND(BALANCE,2) ) OVER (
+        PARTITION BY PAYMENT_MODE_ID
+        ORDER BY SORT_ORDER, TRANSACTION_DATE_DT, VOUCHER_NO
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS CLOSING_BALANCE
+FROM 
+    (
+        SELECT 
+            C.*,
+            C.TRANSACTION_DATE AS TRANSACTION_DATE_DT  
+        FROM COMBINED C
+    )
+ORDER BY 
+PAYEMENT_MODE,
+    TRANSACTION_DATE_DT ASC,
+    SORT_ORDER ASC,
+    VOUCHER_NO ASC
+    
+  ) LOOP
+  
+  v_has_records := TRUE; -- "Flag that records exist."
+
+  ----new add row--------------------------
+IF v_last_payment_mode IS NULL OR v_last_payment_mode <> rec.PAYEMENT_MODE THEN
+      
+  -- close previous table if not first payment mode
+  IF v_last_payment_mode IS NOT NULL THEN
+    -- Calculate the balance (Dr Amount sum - Cr Amount sum)
+    v_calculated_balance := v_dr_amount_sum - v_cr_amount_sum;
+    
+    -- Add calculated balance row only
+    htp.p('<tr style="font-weight:bold; background-color:#e6f7ff; border-top: 2px solid blue;">' ||
+          '<td colspan="3" style="text-align:right; padding: 8px; border: 1px solid #ddd;">Total:</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_dr_amount_sum,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_cr_amount_sum,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_calculated_balance,'999G999G999G999G999G999G990') || '</td>' ||
+          '</tr>');
+    htp.p('</table><br>');
+  END IF;
+      
+  -- Reset payment mode sum for the new payment mode
+  v_payment_mode_sum := 0;
+  v_dr_amount_sum := 0;
+  v_cr_amount_sum := 0;
+      
+  -- Payment mode heading
+  htp.p('<h4 style="background-color:white;
+           padding:5px; margin:0; 
+          font-size:13px; text-align:left;">
+          Payment Mode: ' || NVL(rec.PAYEMENT_MODE, 'N/A') || '</h4>');
+      
+  -- Start new table with headers for this payment mode
+  htp.p('<table style="width:100%; border-collapse:collapse;">');
+
+  htp.p('<tr style="background-color:#B4C6E7; font-weight:bold; border:1px solid #000;">
+          <th style="padding:5px; border:1px solid #000;">Transaction Date</th>
+          <th style="padding:5px; border:1px solid #000;">Voucher Name</th>
+          <th style="padding:5px; border:1px solid #000;">Narrations</th>
+          <th style="padding:5px; border:1px solid #000;">Dr Amount</th>
+          <th style="padding:5px; border:1px solid #000;">Cr Amount</th>
+          <th style="padding:5px; border:1px solid #000;">Closing Balance</th>
+        </tr>');
+
+  v_last_payment_mode := rec.PAYEMENT_MODE;
+  v_header_printed := TRUE;
+END IF;
+
+    htp.p('<tr>' ||
+           '<td style="padding: 8px; border: 1px solid #ddd;">' || rec.TRANSACTION_DATE || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd;">' || rec.VOUCHER_NAME || '</td>' ||
+            '<td style="padding: 8px; border: 1px solid #ddd;">' || rec.NARRATIONS || '</td>' ||
+           '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(rec.DR_AMOUNT,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right; ">' || TO_CHAR(rec.CR_AMOUNT,'999G999G999G999G999G999G990') || '</td>' ||
+           '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(rec.CLOSING_BALANCE,'999G999G999G999G999G999G990') || '</td>' ||
+          '</tr>');
+
+    -- Add the closing balance to the payment mode sum
+    v_payment_mode_sum := v_payment_mode_sum + rec.CLOSING_BALANCE;
+    
+    -- Add the Dr Amount and Cr Amount to their respective sums
+    v_dr_amount_sum := v_dr_amount_sum + NVL(rec.DR_AMOUNT, 0);
+    v_cr_amount_sum := v_cr_amount_sum + NVL(rec.CR_AMOUNT, 0);
+    
+    -- Add to grand totals
+    v_grand_dr_total := v_grand_dr_total + NVL(rec.DR_AMOUNT, 0);
+    v_grand_cr_total := v_grand_cr_total + NVL(rec.CR_AMOUNT, 0);
+
+  END LOOP;
+
+  -- "Close the table only when there are records."
+  IF v_has_records THEN
+    -- Calculate the balance (Dr Amount sum - Cr Amount sum)
+    v_calculated_balance := v_dr_amount_sum - v_cr_amount_sum;
+
+    v_grand_balance := v_grand_dr_total - v_grand_cr_total;
+    -- Add calculated balance row only
+    htp.p('<tr style="font-weight:bold; background-color:#e6f7ff; border-top: 2px solid blue;">' ||
+          '<td colspan="3" style="text-align:right; padding: 8px; border: 1px solid #ddd;">Total:</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_dr_amount_sum,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_cr_amount_sum,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">' || TO_CHAR(v_calculated_balance,'999G999G999G999G999G999G990') || '</td>' ||
+          '</tr>' ||
+          '<tr class="grand-total">' ||
+          '<td colspan="3" style="text-align:right;  padding: 8px; border: 1px solid #ddd; font-weight:bold; background-color:##B4C6E7;">Grand Total:</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight:bold; background-color:#f2f2f2;">' || TO_CHAR(v_grand_dr_total,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight:bold; background-color:#f2f2f2;">' || TO_CHAR(v_grand_cr_total,'999G999G999G999G999G999G990') || '</td>' ||
+          '<td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight:bold; background-color:#f2f2f2;">' || TO_CHAR(v_grand_balance,'999G999G999G999G999G999G990') || '</td>' ||
+          '</tr>');
+    htp.p('</table>');
+
+  END IF;
+
+  htp.p('</div>'); -- close all_reports
+END;
