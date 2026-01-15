@@ -116,7 +116,7 @@ htp.p('
 
   -- Cursor to fetch actual records — you must insert your real query here
   FOR rec IN (
-            WITH OPENING_BALANCE_VOUCHER AS (
+                      WITH OPENING_BALANCE_VOUCHER AS (
             SELECT 
                         TRD_ID, 
                         COA_IDD,
@@ -135,7 +135,7 @@ htp.p('
                         OBV.TRD_DATE TRANSACTION_DATE,
                         TO_NUMBER(:P63_AGENCY) ACCOUNT_ID,
                         (SELECT ACCOUNT_TITLE || '-' || GL_CODE FROM AB_FIN_COA COA WHERE COA_ID = :P63_AGENCY  AND COA.STATUS = 'Y') ACCOUNT_TITLE,
-                        LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                        NVL(LD.LOOKUP_DET_NAME, 'N/A') PAYEMENT_MODE,
                         TRANSCATION_TYPE_IDD PAYMENT_MODE_ID,
                         NVL(SUM(OBT.DR_AMOUNT),0) - NVL(SUM(OBT.CR_AMOUNT),0) OPENING_BALANCE
             FROM 
@@ -148,7 +148,7 @@ htp.p('
                 OBT.STATUS = 'Y'
                 AND  OBT.ORG_ID = :GV_ORG_ID
                 AND OBV.COA_IDD = NVL(:P63_AGENCY, OBV.COA_IDD)
-              AND TRANSCATION_TYPE_IDD  = NVL(:P63_PAYMENT_MODE, TRANSCATION_TYPE_IDD)    
+              AND (TRANSCATION_TYPE_IDD  = NVL(:P63_PAYMENT_MODE, TRANSCATION_TYPE_IDD) OR TRANSCATION_TYPE_IDD IS NULL)    
             GROUP BY
                         TRANSCATION_TYPE_IDD, 
                         OBV.TRD_DATE,
@@ -159,7 +159,7 @@ htp.p('
                         TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY') - 1  TRANSACTION_DATE,
                         ACCOUNT_ID,
                         ACCOUNT_TITLE,
-                        LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                        NVL(LD.LOOKUP_DET_NAME, 'N/A') PAYEMENT_MODE,
                         PAYMENT_MODE_ID,
                         NVL(SUM(DR_AMOUNT),0)  -  NVL(SUM(CR_AMOUNT),0) OPENING_BALANCE
             FROM
@@ -167,7 +167,7 @@ htp.p('
             LEFT JOIN AB_LOOKUP_DETAIL LD ON LD.DET_ID = AL.PAYMENT_MODE_ID
             WHERE 
                             AL.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
-                      AND AL.PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, AL.PAYMENT_MODE_ID)           
+                      AND (AL.PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, AL.PAYMENT_MODE_ID) OR AL.PAYMENT_MODE_ID IS NULL)           
 
 
                    AND TRUNC(TRANSACTION_DATE) < TO_DATE(:P63_FROM_DATE, 'DD-MON-YYYY')
@@ -190,7 +190,7 @@ htp.p('
                     NOT EXISTS (SELECT 1 FROM TABLE(AB_FINANCE_DETAIL_PKG.AGENCY_WISE_LEDGER(:GV_ORG_ID)) C 
                  WHERE 
                               C.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
-                  AND PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, PAYMENT_MODE_ID)               
+                  AND (PAYMENT_MODE_ID  = NVL(:P63_PAYMENT_MODE, PAYMENT_MODE_ID) OR PAYMENT_MODE_ID IS NULL)               
                     AND TRUNC(TRANSACTION_DATE) < TO_DATE(:P63_FROM_DATE, 'DD-MON-YYYY')
                     )  
 )
@@ -243,13 +243,13 @@ htp.p('
                     'OBV Balance' NARRATIONS,
                     CASE WHEN OBV.OPENING_BALANCE > 0 THEN OBV.OPENING_BALANCE ELSE NULL END DR_AMOUNT,
                     CASE WHEN OBV.OPENING_BALANCE < 0 THEN ABS(OBV.OPENING_BALANCE) ELSE NULL END CR_AMOUNT,
-                    LD.LOOKUP_DET_NAME PAYEMENT_MODE,
+                    OBV.PAYEMENT_MODE,
                     OBV.PAYMENT_MODE_ID,
                     0 SORT_ORDER,
                     OBV.OPENING_BALANCE BALANCE
             FROM 
                          OPENING_PAYMENT_MODE OBV
-                 JOIN AB_LOOKUP_DETAIL LD  ON LD.DET_ID = OBV.PAYMENT_MODE_ID AND LD.STATUS='Y'
+                 LEFT JOIN AB_LOOKUP_DETAIL LD  ON LD.DET_ID = OBV.PAYMENT_MODE_ID AND LD.STATUS='Y'
             LEFT JOIN TOTAL_OPENING_BALANCE_BEFORE TOB ON TOB.ACCOUNT_ID=OBV.ACCOUNT_ID
             WHERE
                          TRUNC(OBV.TRANSACTION_DATE)  BETWEEN NVL(TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY'), TRUNC(OBV.TRANSACTION_DATE)) 
@@ -266,7 +266,7 @@ htp.p('
                     'OBV Balance' NARRATIONS,
                     CASE WHEN TOB.OPENING_BALANCE > 0 THEN TOB.OPENING_BALANCE ELSE NULL END DR_AMOUNT,
                     CASE WHEN TOB.OPENING_BALANCE < 0 THEN ABS(TOB.OPENING_BALANCE) ELSE NULL END CR_AMOUNT,
-                    PAYEMENT_MODE,
+                    TOB.PAYEMENT_MODE,
                     TOB.PAYMENT_MODE_ID,
                     0 SORT_ORDER,
                     TOB.OPENING_BALANCE BALANCE
@@ -286,7 +286,13 @@ htp.p('
                 NARRATIONS,
                 ROUND(DR_AMOUNT,2) DR_AMOUNT,
                 ROUND(CR_AMOUNT,2) CR_AMOUNT,
-                NVL(LD.LOOKUP_DET_NAME,LDS.LOOKUP_DET_NAME) PAYEMENT_MODE,
+                --NVL(LD.LOOKUP_DET_NAME, NVL(LDS.LOOKUP_DET_NAME, 'N/A')) PAYEMENT_MODE,
+
+                CASE
+                WHEN NVL(LD.LOOKUP_DET_NAME, LDS.LOOKUP_DET_NAME) = 'BANK'
+                THEN 'N/A'
+                ELSE NVL(LD.LOOKUP_DET_NAME, NVL(LDS.LOOKUP_DET_NAME, 'N/A'))
+                END AS PAYEMENT_MODE,
                 nvl(PAYMENT_MODE_ID,AL.TRANSCATION_TYPE_IDD) PAYMENT_MODE_ID,
                 1 SORT_ORDER,
                  NVL(DR_AMOUNT,0) - NVL(CR_AMOUNT,0) BALANCE
@@ -297,7 +303,8 @@ htp.p('
 
         WHERE 
                     AL.ACCOUNT_ID = NVL(:P63_AGENCY, ACCOUNT_ID)
-           AND NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD)   = NVL(:P63_PAYMENT_MODE, NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD))
+           AND (NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD) = NVL(:P63_PAYMENT_MODE, NVL(PAYMENT_MODE_ID, AL.TRANSCATION_TYPE_IDD)) 
+                OR (PAYMENT_MODE_ID IS NULL AND AL.TRANSCATION_TYPE_IDD IS NULL))
           
             AND TRUNC(TRANSACTION_DATE) BETWEEN NVL(TO_DATE(:P63_FROM_DATE,'DD-MON-YYYY'), TRUNC(TRANSACTION_DATE)) 
                        AND NVL(TO_DATE(:P63_TO_DATE,'DD-MON-YYYY'), TRUNC(TRANSACTION_DATE))
@@ -329,6 +336,7 @@ FROM
             C.TRANSACTION_DATE AS TRANSACTION_DATE_DT  
         FROM COMBINED C
     )
+   
 ORDER BY 
 PAYEMENT_MODE,
     TRANSACTION_DATE_DT ASC,
@@ -368,17 +376,7 @@ IF v_last_payment_mode IS NULL OR v_last_payment_mode <> rec.PAYEMENT_MODE THEN
           font-size:13px; text-align:left;">
           Payment Mode: ' || NVL(rec.PAYEMENT_MODE, 'N/A') || '</h4>');
       
-  -- Start new table with headers for this payment mode
---   htp.p('<table style="width:100%; border-collapse:collapse;">');
 
---   htp.p('<tr style="background-color:#B4C6E7; font-weight:bold; border:1px solid #000;">
---           <th style="padding:5px; border:1px solid #000;">Transaction Date</th>
---           <th style="padding:5px; border:1px solid #000;">Voucher Name</th>
---           <th style="padding:5px; border:1px solid #000;">Narrations</th>
---           <th style="padding:5px; border:1px solid #000;">Dr Amount</th>
---           <th style="padding:5px; border:1px solid #000;">Cr Amount</th>
---           <th style="padding:5px; border:1px solid #000;">Closing Balance</th>
---         </tr>');
 
 
 
