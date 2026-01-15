@@ -369,16 +369,39 @@ IF v_last_payment_mode IS NULL OR v_last_payment_mode <> rec.PAYEMENT_MODE THEN
           Payment Mode: ' || NVL(rec.PAYEMENT_MODE, 'N/A') || '</h4>');
       
   -- Start new table with headers for this payment mode
-  htp.p('<table style="width:100%; border-collapse:collapse;">');
+--   htp.p('<table style="width:100%; border-collapse:collapse;">');
 
-  htp.p('<tr style="background-color:#B4C6E7; font-weight:bold; border:1px solid #000;">
-          <th style="padding:5px; border:1px solid #000;">Transaction Date</th>
-          <th style="padding:5px; border:1px solid #000;">Voucher Name</th>
-          <th style="padding:5px; border:1px solid #000;">Narrations</th>
-          <th style="padding:5px; border:1px solid #000;">Dr Amount</th>
-          <th style="padding:5px; border:1px solid #000;">Cr Amount</th>
-          <th style="padding:5px; border:1px solid #000;">Closing Balance</th>
-        </tr>');
+--   htp.p('<tr style="background-color:#B4C6E7; font-weight:bold; border:1px solid #000;">
+--           <th style="padding:5px; border:1px solid #000;">Transaction Date</th>
+--           <th style="padding:5px; border:1px solid #000;">Voucher Name</th>
+--           <th style="padding:5px; border:1px solid #000;">Narrations</th>
+--           <th style="padding:5px; border:1px solid #000;">Dr Amount</th>
+--           <th style="padding:5px; border:1px solid #000;">Cr Amount</th>
+--           <th style="padding:5px; border:1px solid #000;">Closing Balance</th>
+--         </tr>');
+
+
+
+           -- Start new table for category
+            htp.p('<table style="width:100%; border-collapse:collapse; margin-bottom:15px;"> 
+            <thead> <colgroup>
+             <col style="width:10%;">
+             <col style="width:10%;">
+             <col style="width:40%;">
+             <col style="width:10%;"> 
+             <col style="width:10%;">
+             <col style="width:10%;">
+             
+             </colgroup> <tr style="background-color:rgba(146,208,80,0.237);
+                    font-weight:bold; border:1px solid #000;"> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Transaction Date</th> 
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Name</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Narrations</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Dr Amount</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Cr Amount</th>
+                    <th style="padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;" >Closing Balance</th>
+                   
+                    </tr> </thead> <tbody>');
 
   v_last_payment_mode := rec.PAYEMENT_MODE;
   v_header_printed := TRUE;
