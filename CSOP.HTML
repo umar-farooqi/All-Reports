@@ -1,0 +1,261 @@
+DECLARE
+    l_html CLOB;
+BEGIN
+    FOR r IN (
+       WITH REGISTRATION AS(
+            SELECT
+                        SR_ID ,
+                        REG_NAME ,
+                        ADDRESS,
+                        CONTACT_NUMBER,
+                        CNIC,
+                        REG_TYPE
+            FROM
+                    AB_SETUP_REGISTRATION
+            WHERE
+                          REG_STATUS = 'Y'
+               --- AND ORG_ID = :GV_ORG_ID            
+)
+,SALE_OFFER AS(
+        SELECT 
+                    AU.U_NAME SALE_OFFER, 
+                    AU.USER_ID SALE_OFFER_ID 
+        FROM 
+                    AB_UM_USERS_REG AU
+        WHERE
+                     STATUS='Y'
+) 
+,CUSTOMER_REG AS (
+        SELECT
+                CUSTOMER_ID,  
+                INITCAP(CUSTOMER_NAME) AS CUSTOMER_NAME,
+                INITCAP(ADDRESS) AS ADDRESS,
+                INITCAP(CONTACT_NUMBER) AS CONTACT_NUMBER,
+                CNIC
+        FROM (   
+                SELECT 
+                        SR_ID AS CUSTOMER_ID,
+                        REG_NAME AS CUSTOMER_NAME,
+                        ADDRESS,
+                        CONTACT_NUMBER,
+                        CNIC
+                FROM 
+                            REGISTRATION
+                WHERE 
+                             REG_TYPE = 'CUSTOMER REGISTRATION'
+        UNION ALL
+                SELECT 
+                            SR_ID AS CUSTOMER_ID,
+                            REG_NAME AS CUSTOMER_NAME,
+                            ADDRESS,
+                            CONTACT_NUMBER,
+                            CNIC
+                FROM 
+                            REGISTRATION
+                WHERE 
+                           REG_TYPE = 'COUNTER CUSTOMER')
+)
+,LOOKUP AS(
+            SELECT
+                      DET_ID,
+                      LOOKUP_DET_NAME
+            FROM
+                AB_LOOKUP_DETAIL
+            WHERE
+                STATUS='Y'
+)
+,USER_APPROVAL AS(
+            SELECT
+                       APP_IDS SOD_ID,
+                       INITCAP(CREATED_BY)  ||' ('|| TO_CHAR(CREATED_ON,'DD-MON-YYYY')||')' APPROVAL_BY,
+                       APPROVAL_STATUS
+            FROM
+                        AB_USER_ACTION_APPROVAL
+            WHERE
+                         APP_TYPE='918'
+                AND STATUS='Y'
+)
+,SALE_POINT_ASSIGN AS (
+    SELECT
+            SALE_POINT_ID,
+            SALE_OFFER_ID
+    FROM
+              AB_SETUP_REGISTRATION  ASP
+    WHERE
+                    ASP.ORG_ID=:GV_ORG_ID
+            AND ASP.REG_STATUS='Y'
+            AND ASP.REG_TYPE='ASSIGN SALE POINT'
+             -- AND ( :GV_USER_ID = 42 OR SALE_OFFER_ID = :GV_USER_ID )
+           -- AND SALE_OFFER_ID = :GV_USER_ID
+)
+
+,SCHEDULE_OF_PAYMENT AS (
+        SELECT
+                SCH_ID SOP_ID,
+                SCH_IDS SO_ID
+        FROM
+                    AB_JOB_SCHEDULE
+        WHERE
+                   STATUS='Y'
+          AND SCH_TYPE=799
+)
+        SELECT
+                   CS.SO_ID,
+                    CR.CUSTOMER_ID,  
+                    INITCAP(CR.CUSTOMER_NAME) AS CUSTOMER_NAME,
+                    TO_CHAR(CS.ORDER_DATE, 'DD-MON-YYYY') AS ORDER_DATE,
+                     NVL(CSD.NO_BAGS, 0) AS COUNTER_BAGS,
+                    CSD.BAG_RATE,
+                    CSD.TOTAL_AMOUNT,
+                    ASR.REG_NAME    AS WAREHOUSE,
+                       LD.LOOKUP_DET_NAME   AS PAYMENT_NAME, ITM.ITEM_NAME || ' (' || ITM.PACKING_SIZE || ' ' || ITM.UNIT || ' ' || ITM.PACKING || ')' AS PRODUCT,
+                  
+                    INITCAP(CS.CREATED_BY) || ' (' || TO_CHAR(CS.CREATED_ON, 'DD-MON-YYYY') || ')' AS ADD_BY,
+                    CS.REMARKS,
+                    CASE 
+                            WHEN APP.SOD_ID  IS NULL THEN '<div class="pending-badge"><span class="clock-icon"></span> Pending</div>'
+                            WHEN APP.SOD_ID IS NOT NULL AND  APP.APPROVAL_STATUS = 'APPROVED'  THEN  '<div class="approved-badge"><span class="check-icon"></span> Approved</div>'
+                            WHEN APP.SOD_ID IS NOT NULL AND  APP.APPROVAL_STATUS = 'REJECTED'  THEN  '<div class="rejected-badge"> <span class="cross-icon blinking"></span> Rejected </div>'
+                    END   || ' (' || APP.APPROVAL_BY || ')' AS APPROVAL_STATUS,
+                    CS.PAYMENT_TYPE,
+                    PM.LOOKUP_DET_NAME AS PAYMENT_MODE_TYPE,
+                    CT.LOOKUP_DET_NAME AS CUSTOMER_TYPE
+          
+                 
+        FROM
+                                AB_SO_ORDER_HEAD CS
+                     JOIN  AB_SO_ORDER_DET CSD ON CSD.SO_ID = CS.SO_ID AND CSD.STATUS='Y'
+                     JOIN  AB_ITEMS_MASTER ITM ON ITM.ITEM_ID = CSD.ITEM_ID AND ITM.STATUS='Y'
+            LEFT JOIN  REGISTRATION ASR ON ASR.SR_ID = CSD.WAREHOUSE_ID 
+            LEFT JOIN  LOOKUP LD ON   LD.DET_ID=CS.PAYMENT_ID
+            LEFT JOIN  LOOKUP PT ON   PT.DET_ID=CS.PAYMENT_TERM
+            LEFT JOIN  LOOKUP CT ON   CT.DET_ID=CS.CUSTOMER_TYPE_ID
+            LEFT JOIN  CUSTOMER_REG CR ON CR.CUSTOMER_ID = CS.CUSTOMER_ID
+            LEFT JOIN  USER_APPROVAL APP ON APP.SOD_ID=CSD.SOD_ID
+               --  JOIN  SALE_POINT_ASSIGN SPA ON SPA.SALE_POINT_ID = CS.SALE_POINT_ID 
+            LEFT JOIN  LOOKUP PM  ON PM.DET_ID = CS.PAYMENT_TYPE
+            LEFT JOIN SCHEDULE_OF_PAYMENT SOP ON SOP.SO_ID = CS.SO_ID
+         WHERE 
+                       CS.ORG_ID = :GV_ORG_ID
+              AND CS.STATUS = 'Y'
+              AND CS.SO_TYPE = '708'
+           
+             AND   CSD.SOD_ID =:P1063_SALE_ORDER
+        ORDER BY
+             CS.SO_ID DESC 
+                   
+    ) LOOP
+
+        l_html :=
+        '<style>
+        .sale-card {
+          max-width: 760px;
+          background: #ffffff;
+          border-radius: 24px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+          margin: 24px auto;
+          font-family: "Segoe UI", Roboto, Arial, sans-serif;
+          overflow: hidden;
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .sale-card:hover { transform: translateY(-4px); box-shadow: 0 16px 32px rgba(0,0,0,0.12); }
+
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #36414f; /* Slate Gray-Blue */
+          padding: 20px 24px;
+          color: #ffffff;
+        }
+        .card-header h2 { margin: 0; font-size: 22px; font-weight: 700; }
+        .city { font-size: 12px; color: #cbd5e1; }
+
+        .status {
+          padding: 8px 22px;
+          border-radius: 28px;
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .4px;
+        }
+        .status.pending { background: #fbbf24; color: #fff; }
+        .status.approved { background: #16a34a; color: #fff; }
+        .status.rejected { background: #dc2626; color: #fff; }
+
+        .details-section {
+          background: #f9fafb;
+          padding: 16px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .details-row { display: flex; justify-content: space-between; font-size: 13px; color: #1e293b; font-weight: 600; }
+
+        .product-section {
+background: linear-gradient(135deg, #2a7f7f, #5ca6a6);
+          padding: 20px;
+          border-radius: 0 0 24px 24px;
+          margin-top: 12px;
+          color: #ffffff;
+          box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        }
+        .product-section div { font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+
+        .bags { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 12px; }
+        .bags div {
+          padding: 18px 14px;
+          border-radius: 18px;
+          font-weight: 700;
+          text-align: center;
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        }
+        .bags div:hover { transform: translateY(-6px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+        .bags div:nth-child(2) { background: linear-gradient(135deg, #00b894, #00cec9); } /* Teal gradient */
+        .bags div:nth-child(3) { background: linear-gradient(135deg, #fdcb6e, #e17055); } /* Orange gradient */
+        .bags span { font-size: 12px; opacity: 0.85; }
+        .bags h3 { margin: 6px 0 0; font-size: 18px; font-weight: 700; }
+
+        .card-footer {
+          border-top: 1px dashed #e2e8f0;
+          padding: 14px 20px;
+          font-size: 12px;
+          color: #2d3436; /* Dark Gray */
+          display: flex;
+          justify-content: space-between;
+          margin-top: 16px;
+          font-weight: 600;
+        }
+        </style>' ||
+
+        '<div class="sale-card">' ||
+            '<div class="card-header">' ||
+                '<div><h2>Counter Sale Order #' || r.SO_ID || '</h2><div class="city">' || r.WAREHOUSE || '</div></div>' ||
+                '<span class="status pending">' || r.APPROVAL_STATUS || '</span>' ||
+            '</div>' ||
+
+            '<div class="details-section">' ||
+                '<div class="details-row"><div><strong>Sale Officer:</strong> ' || r.CUSTOMER_NAME || '</div><div><strong>Order Date:</strong> ' || r.ORDER_DATE || '</div></div>' ||
+                '<div class="details-row"><div><strong>Customer Type:</strong> ' || r.CUSTOMER_TYPE || '</div><div><strong>Payment Mode:</strong> ' || r.PAYMENT_MODE_TYPE || '</div></div>' ||
+            '</div>' ||
+
+            '<div class="product-section">' ||
+                '<div><strong>Product:</strong> ' || r.PRODUCT || '</div>' ||
+                '<div class="bags">' ||
+                    '<div><span>No of Bags</span><h3>' || r.COUNTER_BAGS || '</h3></div>' ||
+                    '<div><span>Rate / Bag</span><h3>' || TO_CHAR(r.BAG_RATE,'999G999G999') || '</h3></div>' ||
+                    '<div><span>Total Amount</span><h3>' || TO_CHAR(r.TOTAL_AMOUNT,'999G999G999') || '</h3></div>' ||
+                '</div>' ||
+            '</div>' ||
+
+            '<div class="card-footer"><span>Added By: ' || r.ADD_BY || '</span></div>' ||
+        '</div>';
+
+        htp.p(l_html);
+    END LOOP;
+END;
