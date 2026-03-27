@@ -1,0 +1,197 @@
+DECLARE
+  v_tax_liability NUMBER := 0;
+  v_inv_net_amount NUMBER := 0;
+  v_inv_bags NUMBER := 0;
+  v_cprn_payments NUMBER := 0;
+  
+  -- 新增：声明用于存储总和的变量
+  v_total_receivable NUMBER := 0;
+  v_total_received NUMBER := 0;
+  v_total_balance NUMBER := 0;
+
+BEGIN
+  -- JavaScript for printing and adjusting column widths
+ htp.p('<script>
+        function adjustColumnWidth() {
+          var table = document.querySelector("#all_reports table");
+          if (!table) return;
+          
+          var itemNameColumnIndex = 1; // Index for ITEM NAME column
+          var maxWidth = 0;
+          var rows = table.querySelectorAll("tbody tr");
+          
+          rows.forEach(function(row) {
+            var itemNameCell = row.cells[itemNameColumnIndex];
+            if (itemNameCell) {
+              var cellWidth = itemNameCell.scrollWidth;
+              if (cellWidth > maxWidth) {
+                maxWidth = cellWidth;
+              }
+            }
+          });
+          
+          var header = table.querySelector("thead th.item-name-column");
+          if (header) {
+            header.style.width = maxWidth + "px";
+          }
+          
+          var dataCells = table.querySelectorAll("tbody td.item-name-column");
+          dataCells.forEach(function(cell) {
+            cell.style.width = maxWidth + "px";
+          });
+        }
+       
+           
+        function printDiv(printpage) {
+          adjustColumnWidth();
+          var headstr = "<html><head><title></title><style>";
+          headstr += "@page { size: A4 landscape; margin: 15mm 30mm; }";
+          headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
+          headstr += ".button { padding: 10px 20px; background-color: #1F3864;; color: white; border: none; cursor: pointer; }";
+          headstr += ".button1 { font-size: 16px; }";
+          headstr += "table { border-collapse: collapse; width: 100%; margin: 0; padding: 0; }";
+          // --- CHANGE 1: Table ke font size aur line-height badhaye gaye hain ---
+          headstr += "th, td { text-align: left; padding: 3px; font-size: 12px; line-height: 1.3; }";
+          headstr += "th { background-color: rgba(146, 208, 80, 0.237); -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += ".separator { border-top: 1px solid black; }";
+          headstr += "h4 { background-color:#000080; color:white; padding:3px; margin:0; font-size:13px; text-align:center; }";
+          // --- CHANGE 2: h3 heading ka font size badhaya gaya hai ---
+          headstr += "h3 { color: white; margin: 0; display: flex; align-items: center; justify-content: center; background-color:#000080; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 16px; }";
+          headstr += "@media print { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
+          headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }";
+          headstr += "#div_print1 { margin: 0; padding: 0; }";
+          headstr += "</style></head><body>";
+          var footstr = "</body></html>";
+          var newstr = document.getElementById(printpage).innerHTML;
+          var oldstr = document.body.innerHTML;
+          document.body.innerHTML = headstr + newstr + footstr;
+          window.print();
+          document.body.innerHTML = oldstr;
+          return false;
+        }
+      </script>');
+  -- Print buttons for both reports
+ -- htp.p('<button class="button" onclick="printDiv(''amanat_inward_report'')">Print Amanat Inward Report</button>');
+  htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>');
+
+  -- Start merged report container with full width styling
+  htp.p('<div id="all_reports" style="width: calc(100% - 80px); margin: 0 40px; padding: 0; overflow-x: auto;">');
+
+  -- Daily Stock Report Section
+--   htp.p('<div class="header" style="display: flex; justify-content: space-between; margin-bottom: 20px; width: 100%;">');
+--     htp.p('<h2>Ibrahim Traders</h2>');
+--     --htp.p('<img style="height: 100%" src="#APP_FILES#icons/Akbar Brothers logo.jpg" alt="">');
+--     htp.p('</div>');
+
+
+htp.p('
+<div style="font-family: Arial, sans-serif; font-size: 12px; padding: 6px; text-align: right; width: 100%; box-sizing: border-box;">
+  
+  <span><b>Date:</b> '|| TO_CHAR(SYSDATE,'DD-MON-YYYY') ||'</span>
+  <br><br>
+  <span><b>Print By:</b> '|| :APP_USER  ||'</span>
+ 
+</div>');
+
+
+  -- --- CHANGE 3: Screen view ke liye h3 heading ka font size badhaya gaya hai ---
+  htp.p('<h3 style="font-size: 16px;">Credit Sheet</h3>');
+  
+  -- Table with full width and explicit column widths
+  htp.p('<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">');
+  -- --- CHANGE 4: Table headers ke font size badhaye gaye hain ---
+  htp.p('<tr style="padding:  8px; border: 1px solid #ddd;">');
+--   htp.p('<th style="width:    10%; background-color: #B4C6E7; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Party Ledger</th>');
+  htp.p('<th style="width:    10%; background-color: #B4C6E7; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Party Name</th>');
+  htp.p('<th style="width:    10%; background-color: #B4C6E7; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Contact Number</th>');
+  htp.p('<th style="width:    10%; background-color: #B4C6E7; text-align: center; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Sale Amount</th>');
+  htp.p('<th style="width:    10%; background-color: #B4C6E7; text-align: center; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Received Amount</th>');
+  htp.p('<th style="width:    10%; fount: 30px; background-color: #B4C6E7; text-align: center; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Balance</th>');
+   htp.p('<th style="width:   10%; background-color: #B4C6E7;text-align: CENTER; padding: 8px; border: 1px solid #ddd; font-size: 12px;">Recovery Date</th>');
+  htp.p('</tr>');
+
+  -- Cursor to fetch actual records — you must insert your real query here
+  FOR rec IN (
+          WITH COUNTER_SALE AS(
+        SELECT 
+           
+            PARTY_ID,
+            CUSTOMER_NAME PARTY_NAME,
+            CONTACT_NUMBER,
+            SALE_POINT_ID,
+            NVL(SUM(COUNTER_BAGS),0) COUNTER_BAGS,
+            NVL(SUM(TOTAL_AMOUNT),0) TOTAL_AMOUNT
+        FROM
+            TABLE(AB_SALE_ORDER_PKG.COUNTER_SALE_REPORT(:GV_ORG_ID, :GV_USER_ID))
+        WHERE
+                APPROVAL_STATUS='Approved' 
+            AND PAYMENT_TYPE = 597
+        GROUP BY
+            PARTY_ID,
+            CUSTOMER_NAME,
+            CONTACT_NUMBER,
+            SALE_POINT_ID
+)
+,COUNTER_SALE_RECOVERY AS(
+        SELECT
+            SO.CUSTOMER_ID PARTY_ID,
+            MAX(SOD_DATE)  RECOVERY_DATE,
+            NVL(SUM(TOTAL_AMOUNT),0) COUNTER_RECOVERY
+        FROM
+                 AB_SO_ORDER_HEAD SO
+            JOIN AB_SO_ORDER_DET SOD ON SOD.SO_ID=SO.SO_ID AND SOD.STATUS='Y'
+        WHERE
+                SO.STATUS='Y'
+            AND SO_TYPE='1007' 
+        GROUP BY
+            SO.CUSTOMER_ID
+)
+        SELECT
+          
+            CS.PARTY_ID,
+            PARTY_NAME,
+            CS.CONTACT_NUMBER,
+            RECOVERY_DATE,
+            NVL(TOTAL_AMOUNT,0) RECOVERY_AMOUNT,
+            NVL(COUNTER_RECOVERY,0)  RECEIVED_AMOUNT,
+            NVL(TOTAL_AMOUNT,0)  -  NVL(COUNTER_RECOVERY,0) REMAINING_AMOUNT,
+            'Add Amount' AS ADD_AMOUNT
+        FROM 
+                  COUNTER_SALE CS 
+        LEFT JOIN COUNTER_SALE_RECOVERY CSR ON CSR.PARTY_ID=CS.PARTY_ID 
+
+        WHERE PARTY_NAME IS NOT NULL
+        AND SALE_POINT_ID= NVL(:P92_SALE_POINTS,SALE_POINT_ID)
+
+    
+  ) LOOP
+
+    htp.p('<tr class="customer-row">' ||
+        --   '<td style="width: 10%; padding: 8px; fount: 50px; border: 1px solid #ddd; font-size: 12px;">' || rec.PARTY_ID || '</td>' ||
+          '<td style="width: 10%; padding: 8px; border: 1px solid #ddd; font-size: 12px;">' || rec.PARTY_NAME || '</td>' ||
+          '<td style="width: 10%; padding: 8px; border: 1px solid #ddd; font-size: 12px;">' || rec.CONTACT_NUMBER || '</td>' ||
+          '<td style="width: 10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;">' ||  TO_CHAR(rec.RECOVERY_AMOUNT,'999G999G999G990') || '</td>' ||
+          '<td style="width:  10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;">' || TO_CHAR(rec.RECEIVED_AMOUNT,'999G999G999G990') || '</td>' ||
+          '<td style="width: 10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;">' ||  TO_CHAR(rec.REMAINING_AMOUNT,'999G999G999G990') || '</td>' ||
+          '<td style="width: 10%; padding: 8px; text-align: CENTER; border: 1px solid #ddd; font-size: 12px;">' || TO_CHAR(rec.RECOVERY_DATE,'DD-MON-YYYY') || '</td>' ||
+          '</tr>');
+
+    
+    v_total_receivable := v_total_receivable + NVL(rec.RECOVERY_AMOUNT, 0);
+    v_total_received := v_total_received + NVL(rec.RECEIVED_AMOUNT, 0);
+    v_total_balance := v_total_balance + NVL(rec.REMAINING_AMOUNT, 0);
+
+  END LOOP;
+
+  
+  htp.p('<tr style="font-weight: bold; background-color: #D9E2F3;">'); 
+  htp.p('<td colspan="2" style="text-align: right; padding: 8px; border: 1px solid #ddd; font-size: 12px;"><b>TOTAL:</b></td>'); 
+  htp.p('<td style="width: 10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;"><b>' || TO_CHAR(v_total_receivable, '999G999G999G990') || '</b></td>');
+  htp.p('<td style="width: 10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;"><b>' || TO_CHAR(v_total_received, '999G999G999G990') || '</b></td>');
+  htp.p('<td style="width: 10%; padding: 8px; text-align: right; border: 1px solid #ddd; font-size: 12px;"><b>' || TO_CHAR(v_total_balance, '999G999G999G990') || '</b></td>');
+  htp.p('<td style="width: 10%; padding: 8px; border: 1px solid #ddd; font-size: 12px;"></td>'); 
+  htp.p('</tr>');
+
+  htp.p('</table>');
+  htp.p('</div>'); -- close all_reports
+END;
