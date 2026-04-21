@@ -1,0 +1,598 @@
+BEGIN
+htp.p('<!DOCTYPE html><html><head><style>
+.page { margin: 0 auto; width: 100%; padding: 0; } @page { margin: 10mm; }
+@media print { table { page-break-after: auto; } tr { page-break-inside: avoid; page-break-after: auto; }
+td { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; }
+tfoot { display: table-footer-group; } } #left { width: 15%; display: flex; align-items: center; }
+#right { width: 85%; display: flex; justify-content: flex-end; align-items: center; text-align: right; }
+.page-header { display: flex; justify-content: space-between; align-items: center; width: 99%; padding: 8px 0; }
+p { text-align: center; font-size: 8px; margin: 4px 0; }
+table { width: 100%; margin: 0; border-collapse: collapse; }
+tr { page-break-inside: avoid; page-break-after: auto; height: 20px; }
+th, td { border: 0.5px solid #9FC5E8; text-align: center; font-size: 10px; height: 40px; overflow: hidden; word-wrap: break-word; }
+th { text-align: center; font-size: 10px; padding-top: 0.1em; padding-bottom: 0.1em; width: 100%; word-wrap: break-word; overflow: hidden; }
+.header { padding: 1px 1px; background-color: #073763; color: white; font-size: 12px; }
+#t8, #t9, #t10 { width: 99.5%; margin-bottom: 0px; }
+#t8 td, #t9 td, #t10 td { word-wrap: break-word; background-color: #FFFFFF; }
+
+.overdue-header { padding: 1px 1px; background-color: #073763; color: white; font-size: 14px; }
+.overdue-th { background-color: #9FC5E8; border: 0.5px solid #9FC5E8; font-size: 12px; padding: 3px 2px; height: 25px; }
+.overdue-td { border: 0.5px solid #9FC5E8; font-size: 12px; padding: 2px; height: 20px; }
+
+.financial-header { padding: 1px 1px; background-color: #073763; color: white; font-size: 14px; /* Increased font size */ }
+.financial-th { background-color: #9FC5E8; /* Changed to light blue to match first report */ border: 0.5px solid #9FC5E8; /* Changed to match first report */ font-size: 12px; /* Increased font size */ }
+.financial-td { border: 0.5px solid #9FC5E8; /* Changed to match first report */ font-size: 12px; /* Increased font size */ }
+</style><script>
+function printDiv(printpage) {
+var headstr = "<html><head><title></title><style>";
+headstr += `
+.page { margin: 0 auto; width: 100%; padding: 0; }
+@page { margin: 10mm; size: A4 landscape; }
+@media print { table { page-break-after: auto; } thead { display: table-header-group; } tfoot { display: table-footer-group; } }
+p { text-align: center; font-size: 10px; margin: 4px 0; }
+table { width: 100%; margin: 0; border-collapse: collapse; }
+tr {height: 20px;}
+th, td { border: 0.5px solid #9FC5E8; text-align: center; font-size: 10px; height: 40px; overflow: hidden; word-wrap: break-word; }
+th { text-align: center; font-size: 10px; padding-top: 0.1em; padding-bottom: 0.1em; width: 100%; word-wrap: break-word; overflow: hidden; }
+.header { padding: 1px 1px; background-color: #073763 !important; color: white; font-size: 16px; }
+.overdue-header { padding: 1px 1px; background-color: #073763 !important; color: white; font-size: 16px; }
+.overdue-th { background-color: #9FC5E8 !important; border: 0.5px solid #9FC5E8; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 3px 2px; height: 25px; }
+.overdue-td { border: 0.5px solid #9FC5E8; padding: 2px; height: 20px; }
+.financial-header { padding: 1px 1px; background-color: #073763 !important; color: white; font-size: 16px; }
+.financial-th { background-color: #9FC5E8 !important; border: 0.5px solid #9FC5E8; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.financial-td {border: 0.5px solid #9FC5E8;}
+#t8, #t9, #t10 { width: 99.5%; margin-bottom: 0px; }
+#t8 td, #t9 td, #t10 td { word-wrap: break-word; }
+#t8 th, #t9 th, #t10 th { background-color: #FFFFFF; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#left { flex: 0 0 auto; width: 15%; display: flex; align-items: center; }
+#right { flex: 1; display: flex; justify-content: flex-end; align-items: center; text-align: right; white-space: nowrap; }
+.page-header { display: flex; justify-content: space-between; align-items: center; width: 97.5%; padding: 8px 0; }`;
+headstr += "</style></head><body>";
+var footstr = "</body></html>";
+var newstr = document.getElementById(printpage).innerHTML;
+var oldstr = document.body.innerHTML;
+document.body.innerHTML = headstr + newstr + footstr;
+window.print();
+document.body.innerHTML = oldstr;
+return false;
+}
+</script></head><body>');
+htp.p('<button class="button" style="background-color:green; color:white;" onclick="printDiv(''all_reports'')">Print Reports</button>');
+htp.p('<div id="all_reports">');
+htp.p('<div class="page-header">
+<div id="right">');
+FOR z IN (SELECT TO_CHAR(SYSDATE, 'DAY MONTH DD, YYYY') AS t FROM DUAL) 
+LOOP htp.p('<p style="margin-bottom:-5px; font-size: 18px; font-weight: bold;">' || htf.escape_sc(z.t) ||  '</p>');
+END LOOP;
+htp.p('</div></div>');
+
+htp.p('<table id="t8">');
+htp.p('<tr><th colspan="13" class="header">Over Due Bank Liability and Available Cushion</th></tr>');
+htp.p('<tr>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Bank Name</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Facility</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Account Name</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Company Name</th>');
+htp.p('<th style="width:9%; background-color:#9FC5E8;" class="overdue-th">Agency</th>');
+htp.p('<th style="width:8%; background-color:#9FC5E8;" class="overdue-th">BG Number</th>');
+htp.p('<th style="width:8%; background-color:#9FC5E8;" class="overdue-th">Issue Date</th>');
+htp.p('<th style="width:8%; background-color:#9FC5E8;" class="overdue-th">Expiry Date</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Total Amount</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Overdue Amount</th>');
+htp.p('<th style="width:10%; background-color:#9FC5E8;" class="overdue-th">Facilities Total</th>');
+
+htp.p('</tr>');
+DECLARE
+v_overdue_total NUMBER := 0;
+OVER_FACILITIES_NAME      VARCHAR2(200);
+OVER_FACILIT_AMOUNT      VARCHAR2(200);
+BEGIN
+FOR x IN (
+WITH DOCUMENT_DETAILS AS(
+SELECT DR.DOC_ID, DR.DOC_TYPE_ID, DR.DOCUMENTS_TYPE,
+ROW_NUMBER() OVER (PARTITION BY DR.DOC_TYPE_ID ORDER BY DR.DOC_ID DESC) AS DOC_RANK
+FROM AB_DOCUMENT_RECORDS DR
+WHERE DR.STATUS = 'Y' AND DOC_TYPE = 'LIMIT UTILIZATION'
+),
+BANK_NAME as (
+SELECT AST.REG_NAME, ASM.SR_IDS 
+FROM AB_SETUP_REGISTRATION ASM
+JOIN AB_SETUP_REGISTRATION AST ON AST.SR_ID=ASM.SR_IDS AND AST.REG_TYPE='BANK'
+WHERE ASM.REG_TYPE='BANK LOV'
+AND  (ASM.ORG_ID= :GV_ORG_ID  OR ASM.ORG_ID=1001)
+GROUP BY AST.REG_NAME , ASM.SR_IDS
+)
+,FOL_DETAIL AS(
+SELECT AFL.ID FOL_ID,BN.REG_NAME BANK_NAME ,  AFLD.FOL_HINT, AFLD.ID FOLD_ID, AFL.BANK_BRANCH,
+ALD.LOOKUP_DET_NAME FACILITIES_NAME, AFA.ID ACCOUNT_ID, AFA.ACCOUNT_NO ACCOUNT_NOO,
+CASE WHEN ASB.REG_CODE IS NULL THEN ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME  
+ELSE  ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END ACCOUNT_NAME,
+ASCM.REG_NAME COMPANY_NAME
+FROM AB_FACILITIES_LETTER AFL
+LEFT JOIN AB_FACILITIES_LETTER_DET AFLD ON AFLD.MAST_ID = AFL.ID
+LEFT JOIN AB_FACILITIES_LETTER_DET AFLDS ON AFLDS.IDS = AFLD.ID
+LEFT JOIN BANK_NAME BN ON BN.SR_IDS  = AFL.BANK_ID
+LEFT JOIN AB_LOOKUP_DETAIL ALD ON ALD.DET_ID=AFLD.FACILITIES_ID AND LOOKUP_ID = '032'
+LEFT JOIN AB_FACILITIES_LETTER_DET AFA ON AFA.IDS=AFLD.ID AND AFA.IMAGE_TYPE='FACILITIES ACCOUNT NUMBER'
+LEFT JOIN AB_SETUP_REGISTRATION ASB ON ASB.SR_ID=AFA.ACCOUNT_NO AND ASB.REG_TYPE IN ('BANK LOV','624')
+LEFT JOIN AB_SETUP_REGISTRATION ASCM ON ASCM.SR_ID=ASB.COMPANY_ID AND ASCM.REG_TYPE='COMPANY'
+WHERE AFL.FACILITIES_TYPE = 'FACILITIES MAST' AND AFL.ORG_ID = :GV_ORG_ID
+GROUP BY AFL.ID, BN.REG_NAME, AFLD.ID, AFL.BANK_BRANCH, AFLD.FOL_HINT, ALD.LOOKUP_DET_NAME, AFA.ID, AFA.ACCOUNT_NO,
+CASE WHEN ASB.REG_CODE IS NULL THEN  ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME
+ELSE  ASB.REG_CODE ||' - '||ASB.REG_DISCRIPTION||' - '||ASB.REG_NAME END, ASCM.REG_NAME 
+)
+,FUND_REQ_DETAIL AS (
+SELECT  DET_ID, IDS, SUM(BALANCE) REQ_AMT
+FROM AB_PO_DEMAND_REQ_DET
+WHERE ORG_ID=:GV_ORG_ID AND DET_STATUS='CREATED' AND STATUS='Y'
+GROUP BY IDS, DET_ID
+)
+,DEMAND_REQUEST_BG AS(
+SELECT TR.TR_ID, TRD_ID, TR_IDS, TRD.TRD_AMOUNT
+FROM AB_FIN_TRANSACTION TR
+JOIN AB_FIN_TRANSACTION_DET TRD ON TRD.TR_ID=TR.TR_ID AND TRD.STATUS='Y'
+WHERE TR.TR_TYPE='623' AND TR.ORG_ID=:GV_ORG_ID AND TR.STATUS='Y'
+)
+,APPROVE_AMOUNT AS (
+SELECT TRD.TRD_ID, BG.TR_IDS
+FROM AB_FIN_TRANSACTION_DET TRD 
+JOIN  DEMAND_REQUEST_BG BG ON BG.TRD_ID=TRD.TRD_IDS
+WHERE TRD.TRD_TYPE='632' AND TRD.ORG_ID=:GV_ORG_ID AND TRD.STATUS='Y'
+)
+,DEMAND_VOUCHER AS(
+SELECT APP.TR_IDS LU_ID, NVL(SUM(DR_AMOUNT),0)  DR_AMOUNT
+FROM AB_FIN_TRANSACTION_DET TRD 
+JOIN  APPROVE_AMOUNT APP ON APP.TRD_ID=TRD.TRD_IDS
+WHERE TRD.TRD_TYPE='628' AND TRD.ORG_ID=:GV_ORG_ID AND TRD.STATUS='Y' AND DR_AMOUNT IS NOT NULL
+GROUP BY APP.TR_IDS 
+)
+,LU_MATURITY AS(
+SELECT AFL.FL_IDS
+FROM AB_FACILITIES_LETTER AFL
+WHERE AFL.FACILITIES_TYPE = 'LU MATURITY'
+AND AFL.ORG_ID = :GV_ORG_ID
+AND AFL.STATUS = 'Y'
+)
+, SECURTITY_CHEQUE_POL_NO AS (
+
+SELECT 
+ACB.POL_NO_BOX,
+'POL#-(' || ACB.POL_NO_BOX || ')-Chq:#-' || BCA.CHEQUE_NO || '-' || ITM.ITEM_NAME || ' (' || ITM.PACKING_SIZE || ' ' || ITM.UNIT || ' ' || ITM.PACKING || ')' AS POL_INFO,
+ACB.CB_ID AS POL_ID
+FROM                  AB_CHEQUE_BOOK ACB
+LEFT JOIN AB_CHEQUE_BOOK BCA  ON BCA.CB_ID = ACB.CB_IDS       
+LEFT JOIN AB_ITEMS_MASTER ITM    ON ITM.ITEM_ID = ACB.PRODUCT_ID  AND ITM.STATUS = 'Y'
+WHERE ACB.ORG_ID = :GV_ORG_ID
+AND ACB.CB_TYPE = 'SECURITY CHEQUE'
+AND ACB.STATUS ='Y'
+ORDER BY ACB.CB_ID DESC
+)
+,LIMIT_UTILIZATION AS(
+SELECT AFL.ID, AFL.FACILITIES_ID, AFL.ACCOUNT_NO, AFL.FACILITIES_TYPE, AFL.STATUS, AFL.SUPPLIER_ID,
+MAX(CASE WHEN ASR.SR_ID = AFL.SUPPLIER_ID AND ASR.REG_TYPE = 'VENDOR' 
+THEN INITCAP(ASR.PARTY_NAME) ELSE NULL END) AS Supplier_Name,
+AFL.BG_TYPE, AFL.AMOUNT, AFL.BG_ISSU_DATE, AFL.BG_MATURITY_DATE, AFL.BG_EXPIRE_DATE,
+AFL.DAYS, AFL.CREDIT_DAYS, AFL.REMARKS, AFL.BG_NUMBER, AFL.AGENCY_ID,
+MAX(CASE WHEN ASR.SR_ID = AFL.AGENCY_ID AND ASR.REG_TYPE = 'AGENCY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS Agency_Name,
+MAX(CASE WHEN ASR.SR_ID = AFL.BEN_COMPANY_ID AND ASR.REG_TYPE = 'COMPANY' THEN INITCAP(ASR.REG_NAME) ELSE NULL END) AS BENEFICIAL_COMPANY1,
+AFL.ORDER_PURPOSE,
+MAX(CASE WHEN ALD.DET_ID = AFL.ORDER_PURPOSE THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS PURPOSE,
+AFL.BG_CATEGORY_ID,
+MAX(CASE WHEN ALD.DET_ID = AFL.BG_CATEGORY_ID THEN ALD.LOOKUP_DET_NAME ELSE NULL END) AS CATEGORY,
+CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS MATURITY, 
+CASE WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 1) THEN TO_CHAR(AFL.AMOUNT) ELSE NULL END AS TOMORROW,
+CASE 
+WHEN TRUNC(AFL.BG_EXPIRE_DATE) = TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT)
+WHEN TRUNC(AFL.BG_EXPIRE_DATE) < TRUNC(SYSDATE - 2) THEN TO_CHAR(AFL.AMOUNT)
+ELSE NULL
+END AS DAY_AFTER_TOMORROW, 
+CASE 
+WHEN TRUNC(AFL.BG_EXPIRE_DATE) > TRUNC(SYSDATE) THEN TO_CHAR(AFL.AMOUNT)
+ELSE NULL
+END AS OVER_DUE,        
+AFL.MATURITY_TYPE,
+CASE WHEN AFL.MATURITY_TYPE='FINANCIAL' AND 
+TRUNC(AFL.BG_EXPIRE_DATE)=TRUNC(SYSDATE) AND AFL.AMOUNT-NVL(BG.TRD_AMOUNT,0) > 0 THEN 'FUNDS REQUISITION' ELSE NULL END AS FUNDS_REQUISITION,
+INITCAP(AFL.CREATED_BY) || ' (' || TO_CHAR(AFL.CREATED_ON, 'DD-MON-YYYY HH:MIPM') || ')' AS CREATED_BY,
+AFL.CREATED_BY AS CREATED_BYS,
+BG.TR_IDS REQ_IDS, LM.FL_IDS, AFL.POL_NO, POL.POL_INFO, POL.POL_NO_BOX
+FROM 
+AB_FACILITIES_LETTER AFL  
+LEFT JOIN AB_SETUP_REGISTRATION ASR ON ASR.SR_ID IN (AFL.SUPPLIER_ID, AFL.AGENCY_ID,AFL.BEN_COMPANY_ID) 
+LEFT JOIN AB_LOOKUP_DETAIL ALD ON ALD.DET_ID IN (AFL.BG_CATEGORY_ID, AFL.ORDER_PURPOSE, AFL.BG_NATURE, AFL.FACILITIES_ID) 
+LEFT JOIN DEMAND_REQUEST_BG BG ON BG.TR_IDS=AFL.ID
+LEFT JOIN LU_MATURITY LM ON LM.FL_IDS=AFL.ID
+LEFT JOIN SECURTITY_CHEQUE_POL_NO POL ON POL.POL_ID= AFL.POL_NO  
+LEFT JOIN DOCUMENT_DETAILS DR   ON DR.DOC_TYPE_ID = AFL.ID AND DR.DOC_RANK = 1
+LEFT JOIN FOL_DETAIL FD ON FD.FOLD_ID  = AFL.ID
+WHERE 
+AFL.FACILITIES_TYPE = 'LIMIT UTILIZATION'
+AND   AFL.ORG_ID = NVL(:GV_ORG_ID,AFL.ORG_ID)
+AND   AFL.STATUS = 'Y'
+AND   TRUNC(AFL.BG_ISSU_DATE) BETWEEN NVL(TO_DATE(:P590_FROM_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) )  AND NVL(TO_DATE(:P590_TO_DATE, 'DD-MON-YYYY'), TRUNC(AFL.BG_ISSU_DATE) )
+GROUP BY 
+AFL.ID, AFL.FACILITIES_TYPE, AFL.ACCOUNT_NO, AFL.STATUS, AFL.BG_NUMBER, AFL.SUPPLIER_ID,
+AFL.BG_TYPE, AFL.FACILITIES_ID, AFL.AMOUNT, AFL.CREDIT_DAYS, AFL.MATURITY_TYPE, AFL.BG_ISSU_DATE,
+AFL.BG_EXPIRE_DATE, AFL.AGENCY_ID, AFL.ORDER_PURPOSE, AFL.BG_CATEGORY_ID, AFL.CREATED_ON, AFL.CREATED_BY,
+AFL.MATURITY, AFL.REMARKS, AFL.TOMORROW, AFL.DAY_AFTER_TOMORROW, AFL.OVER_DUE, AFL.BG_MATURITY_DATE,
+NVL(BG.TRD_AMOUNT,0), BG.TRD_AMOUNT, BG.TR_IDS , LM.FL_IDS, AFL.POL_NO, POL.POL_INFO,POL.POL_NO_BOX,DR.DOC_ID, AFL.DAYS
+)
+SELECT DISTINCT
+FOL_ID, BANK_NAME, FOL_HINT, FOLD_ID, BANK_BRANCH, FACILITIES_NAME,
+COUNT(*) OVER (PARTITION BY FACILITIES_NAME) AS FACILIT_NAME_ROWSPAN,
+SUM(AMOUNT) OVER (PARTITION BY FACILITIES_NAME) AS FACILIT_AMOUNT,
+ACCOUNT_ID, ACCOUNT_NOO, ACCOUNT_NAME, COMPANY_NAME, ID, FACILITIES_ID, ACCOUNT_NO,	
+FACILITIES_TYPE, SUPPLIER_NAME, BG_TYPE,
+CASE WHEN TRUNC(BG_EXPIRE_DATE) < TRUNC(SYSDATE) 
+THEN NVL(AMOUNT,0) ELSE 0 END AS OVERDUE_AMOUNT, 
+AMOUNT, BG_ISSU_DATE, BG_MATURITY_DATE, BG_EXPIRE_DATE, DAYS, CREDIT_DAYS,	
+REMARKS	, BG_NUMBER, AGENCY_ID, AGENCY_NAME, BENEFICIAL_COMPANY1, ORDER_PURPOSE, PURPOSE,
+CATEGORY, MATURITY, TOMORROW, DAY_AFTER_TOMORROW, OVER_DUE, MATURITY_TYPE, FUNDS_REQUISITION, CREATED_BY,
+FL_IDS,POL_NO,	POL_INFO, POL_NO_BOX, BENEFICIAL_COMPANY, ALLOCATED_AMOUNT, UTILIZATION_STATUS
+FROM(
+
+SELECT FD.*, LU.*, NVL(LU.BENEFICIAL_COMPANY1,FD.COMPANY_NAME) BENEFICIAL_COMPANY, NVL(VOU.DR_AMOUNT,0) ALLOCATED_AMOUNT,
+CASE   WHEN LU.REQ_IDS IS NOT NULL  AND VOU.LU_ID IS NULL AND AA.TR_IDS IS NULL AND LU.BG_MATURITY_DATE IS NULL THEN 'Demand Created'
+WHEN VOU.LU_ID IS NULL  AND LU.REQ_IDS IS NOT NULL AND AA.TR_IDS IS NOT NULL AND LU.BG_MATURITY_DATE IS NULL   THEN 'Demand Approved'
+WHEN VOU.LU_ID IS NOT NULL AND LU.AMOUNT - NVL(VOU.DR_AMOUNT,0) > 0 AND LU.BG_MATURITY_DATE IS NULL   THEN 'Partial Allocated'
+WHEN VOU.LU_ID IS NOT NULL AND LU.AMOUNT - NVL(VOU.DR_AMOUNT,0) = 0 AND LU.BG_MATURITY_DATE IS NULL    THEN 'Allocated'
+WHEN LU.FL_IDS IS NOT NULL AND LU.BG_MATURITY_DATE IS NULL THEN 'Matured'
+WHEN LU.BG_MATURITY_DATE IS NOT NULL  THEN 'Early Matured'
+ELSE NULL
+END AS UTILIZATION_STATUS
+
+FROM
+LIMIT_UTILIZATION LU
+JOIN FOL_DETAIL FD ON FD.FOLD_ID=LU.FACILITIES_ID AND FD.ACCOUNT_ID=LU.ACCOUNT_NO
+LEFT JOIN  APPROVE_AMOUNT AA ON AA.TR_IDS=LU.ID
+LEFT JOIN DEMAND_VOUCHER VOU ON VOU.LU_ID=LU.ID
+
+-- ORDER BY
+-- LU.ID  DESC
+) 
+
+WHERE 
+UTILIZATION_STATUS NOT IN('Allocated','Matured')
+AND TRUNC(BG_EXPIRE_DATE) < TRUNC(SYSDATE)AND NVL(AMOUNT,0) > 0
+ORDER BY
+FACILITIES_NAME
+)
+LOOP
+v_overdue_total := v_overdue_total + x.OVERDUE_AMOUNT;
+htp.p('<tr>');
+htp.p('<td class="overdue-td">' || NVL(x.BANK_NAME, 'N/A') || '</td>');
+IF OVER_FACILITIES_NAME IS NULL
+   OR OVER_FACILITIES_NAME <> x.FACILITIES_NAME
+THEN
+htp.p(
+    '<td rowspan="' || x.FACILIT_NAME_ROWSPAN || '">' ||
+    NVL(x.FACILITIES_NAME, 'N/A') ||
+    '</td>'
+);
+END IF;
+htp.p('<td class="overdue-td">' || NVL(x.ACCOUNT_NAME, 'N/A') || '</td>');
+htp.p('<td class="overdue-td">' || NVL(x.COMPANY_NAME, 'N/A') || '</td>');
+htp.p('<td class="overdue-td">' || NVL(x.AGENCY_NAME, 'N/A') || '</td>');
+htp.p('<td class="overdue-td">' || NVL(x.BG_NUMBER, 'N/A') || '</td>');
+htp.p('<td class="overdue-td">' || TO_CHAR(NVL(x.BG_ISSU_DATE, SYSDATE), 'DD-MON-YYYY') || '</td>');
+htp.p('<td class="overdue-td">' || TO_CHAR(NVL(x.BG_EXPIRE_DATE, SYSDATE), 'DD-MON-YYYY') || '</td>');
+htp.p('<td class="overdue-td" style="text-align:right;">' || TO_CHAR(x.AMOUNT, 'FM999G999G999G999G999G990D00') || '</td>');
+htp.p('<td class="overdue-td" style="text-align:right;">' || TO_CHAR(x.OVERDUE_AMOUNT, 'FM999G999G999G999G999G990D00') || '</td>');
+IF OVER_FACILIT_AMOUNT IS NULL
+   OR OVER_FACILIT_AMOUNT <> x.FACILIT_AMOUNT
+THEN
+    htp.p(
+        '<td rowspan="' || x.FACILIT_NAME_ROWSPAN || '">' ||
+        TO_CHAR(x.FACILIT_AMOUNT, 'FM999G999G999G999G999G990D00') ||
+        '</td>'
+    );
+END IF;
+htp.p('</tr>');
+
+OVER_FACILITIES_NAME := x.FACILITIES_NAME;
+OVER_FACILIT_AMOUNT  := x.FACILIT_AMOUNT;
+
+END LOOP;
+
+htp.p('<tr class="total-row" style="background-color:#9FC5E8; font-weight:bold;">');
+htp.p('<td colspan="9" style="text-align:right; padding:8px;">Overdue Total:</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_overdue_total, 'FM999G999G999G999G999G990D00') || '</td>');
+htp.p('<td></td>');
+htp.p('</tr>');
+END;
+htp.p('</table>');
+htp.p('<br><br>');
+
+htp.p('<table id="t9">');
+htp.p('<tr><th colspan="21" class="header">Bank Liability and Available Cushion</th></tr>');
+DECLARE
+v_emp_name VARCHAR2(200);
+v_prev_category VARCHAR2(500) := NULL;
+v_cash_margin_sum NUMBER := 0;
+v_remaining_payable_sum NUMBER := 0;
+v_total_amount_sum NUMBER := 0;
+v_total_availed_sum NUMBER := 0;
+v_caution_balance_sum NUMBER := 0;
+v_prev_bank VARCHAR2(200) := NULL;
+v_bank_total_amount NUMBER := 0;
+v_bank_total_availed NUMBER := 0;
+v_bank_total_balance NUMBER := 0;
+v_grand_cash_margin_sum NUMBER := 0;
+v_grand_remaining_payable_sum NUMBER := 0;
+v_product_net_amount_sum NUMBER := 0;
+v_grand_product_net_amount_sum NUMBER := 0;
+
+PREV_FACILITIES_NAME      VARCHAR2(200);
+PREV_MONTH_GROUP          DATE;
+BEGIN
+FOR x IN (
+SELECT 
+    FACILITIES_NAME_ROWSPAN,
+    LU_ID,
+    BG_TYPE,
+    PRODUCT_NET_AMOUNT,
+    FACILITIES_TOTAL,
+    BG_ISSU_DATE,
+    BG_EXPIRE_DATE,
+    EXPIRE_DAY_NAME,
+    IS_EXPIRE_AFTER_TODAY,
+    CREDIT_DAYS,
+    SUBSTR(REMARKS, 1, 1000)   AS REMARKS,
+    BG_NUMBER,
+    AGENCY_NAME,
+    PRODUCT_NAME,
+    NET_AMOUNT,
+    INITCAP(DUE_DATE) DUE_DATE,
+    PAYMENT_DATE,
+    FOL_HINT,
+    FOL_AMOUNT,
+    FACILITIES_NAME,
+    BANK_NAME,
+    COMPANY_NAME,
+    BG_CASH_MARGIN,
+    CASH_MARGIN,
+    CASH_MARGIN_IN_BANK,
+    REMAINING_PAYABLE,
+    MONTH_GROUP,
+    MONTH_DISPLAY,
+    MATURITY_TYPE
+
+FROM (
+SELECT 
+    COUNT(*) OVER (PARTITION BY FACILITIES_NAME, TRUNC(BG_EXPIRE_DATE, 'MON')) AS FACILITIES_NAME_ROWSPAN,
+    SUM(AMOUNT) OVER (PARTITION BY FACILITIES_NAME, TRUNC(BG_EXPIRE_DATE, 'MON'))  AS FACILITIES_TOTAL,
+    LU_ID, BG_TYPE, AMOUNT AS PRODUCT_NET_AMOUNT, BG_ISSU_DATE, BG_EXPIRE_DATE,
+    DAYS AS EXPIRE_DAY_NAME, IS_EXPIRE_AFTER_TODAY, CREDIT_DAYS, REMARKS, BG_NUMBER, AGENCY_NAME,
+    PRODUCT AS PRODUCT_NAME, AMOUNT AS NET_AMOUNT, PAYMENT_DATE, TO_CHAR(PAYMENT_DATE, 'DAY') AS DUE_DATE, FOL_HINT, FOL_AMOUNT, FACILITIES_NAME,
+    BANK_NAME, BENEFICIAL_COMPANY AS COMPANY_NAME, CASH_MARGIN AS BG_CASH_MARGIN, CASH_MARGIN, CASH_MARGIN_IN_BANK,
+    REMAINING_PAYABLE, TRUNC(BG_EXPIRE_DATE, 'MON') AS MONTH_GROUP,
+    TRIM(TO_CHAR(BG_EXPIRE_DATE, 'Month')) || '-' 
+        || TO_CHAR(BG_EXPIRE_DATE, 'YYYY') AS MONTH_DISPLAY,
+    MATURITY_TYPE
+
+FROM TABLE(FUND_MANAGEMENT_USING_BG_UTILIZATION_FN(:GV_ORG_ID))
+WHERE ---TRUNC(BG_EXPIRE_DATE, 'MON') >= TRUNC(SYSDATE, 'MON')
+  --AND TRUNC(PAYMENT_DATE)          >= TRUNC(SYSDATE)
+  TRUNC(BG_EXPIRE_DATE) >= TRUNC(SYSDATE)
+)
+ORDER BY MONTH_GROUP, FACILITIES_NAME, PAYMENT_DATE ASC
+)
+LOOP
+IF v_prev_category IS NULL OR v_prev_category <> x.MONTH_GROUP THEN
+IF v_prev_category IS NOT NULL THEN
+htp.p('<tr class="total-row" style="background-color:#073763; font-weight:bold;">');
+htp.p('<td colspan="16" style="text-align:right; padding:8px;">Total:</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_product_net_amount_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_cash_margin_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_remaining_payable_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td ></td>');
+
+htp.p('</tr>');
+htp.p('</tbody>');
+END IF;
+v_product_net_amount_sum := 0;
+v_cash_margin_sum := 0;
+v_remaining_payable_sum := 0;
+
+htp.p('<tr>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Facilities</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">FOL Hint</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">FOL Amount</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Bank</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">Product</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Company</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">Agency</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">Type</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Bg Number</th>');
+
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Issue Date</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Due Date</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">Due Day</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Payment Date</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Credit Days</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Expiry Days</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Cash Margin %</th>');
+htp.p('<th style="width:6%; background-color:#9FC5E8;">Amount</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Cash Margin Amount</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Remaining Payable</th>');
+htp.p('<th style="width:4%; background-color:#9FC5E8;">Facilities Total</th>');
+
+htp.p('</tr>');
+htp.p('<tbody>');
+htp.p('<tr class="month-header" style="background-color:#073763;">');
+htp.p('<td colspan="21" style="padding:8px; font-weight:bold; font-size:10px; color:black; text-align:left;">');
+htp.p('Month: ' || x.MONTH_DISPLAY);
+htp.p('</td>');
+htp.p('</tr>');
+v_prev_category := x.MONTH_GROUP;
+END IF;
+v_product_net_amount_sum := v_product_net_amount_sum + NVL(x.PRODUCT_NET_AMOUNT,0);
+v_cash_margin_sum := v_cash_margin_sum + NVL(x.CASH_MARGIN_IN_BANK, 0);
+v_remaining_payable_sum := v_remaining_payable_sum + NVL(x.REMAINING_PAYABLE, 0);
+v_grand_product_net_amount_sum := v_grand_product_net_amount_sum + NVL(x.PRODUCT_NET_AMOUNT,0);
+v_grand_cash_margin_sum := v_grand_cash_margin_sum + NVL(x.CASH_MARGIN_IN_BANK, 0);
+v_grand_remaining_payable_sum := v_grand_remaining_payable_sum + NVL(x.REMAINING_PAYABLE, 0);
+htp.p('<tr>');
+IF PREV_FACILITIES_NAME IS NULL
+   OR PREV_FACILITIES_NAME <> x.FACILITIES_NAME
+   OR PREV_MONTH_GROUP <> x.MONTH_GROUP
+THEN
+
+    htp.p(
+        '<td rowspan="' || x.FACILITIES_NAME_ROWSPAN || '">' ||
+        NVL(x.FACILITIES_NAME, 'N/A') ||
+        '</td>'
+    );
+
+END IF;
+htp.p('<td>' || x.FOL_HINT   || '</td>');
+htp.p('<td>' || TO_CHAR(x.FOL_AMOUNT,'999G999G999G999G999G999G990')   || '</td>');
+htp.p('<td>' || x.BANK_NAME || '</td>');
+htp.p('<td>' || x.PRODUCT_NAME || '</td>');
+htp.p('<td>' || x.COMPANY_NAME || '</td>');
+htp.p('<td>' || x.AGENCY_NAME || '</td>');
+htp.p('<td>' || x.BG_TYPE || '</td>');
+htp.p('<td>' || x.BG_NUMBER || '</td>');
+
+htp.p('<td>' || TO_CHAR(NVL(x.BG_ISSU_DATE, SYSDATE),'DD-MON-YYYY') || '</td>');
+htp.p('<td>' || TO_CHAR(NVL(x.BG_EXPIRE_DATE, SYSDATE),'DD-MON-YYYY') || '</td>');
+htp.p('<td>' || x.DUE_DATE || '</td>');
+htp.p('<td>' || TO_CHAR(NVL(x.PAYMENT_DATE, SYSDATE),'DD-MON-YYYY') || '</td>');
+htp.p('<td style="text-align:center;">' || x.CREDIT_DAYS || '</td>');
+htp.p('<td style="text-align:center;">' || x.EXPIRE_DAY_NAME || '</td>');
+htp.p('<td style="text-align:center;">' || x.CASH_MARGIN || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(x.PRODUCT_NET_AMOUNT,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(x.CASH_MARGIN_IN_BANK,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(x.REMAINING_PAYABLE,'999G999G999G999G999G999G990') || '</td>');
+IF PREV_FACILITIES_NAME IS NULL
+   OR PREV_FACILITIES_NAME <> x.FACILITIES_NAME
+   OR PREV_MONTH_GROUP <> x.MONTH_GROUP
+THEN
+    htp.p(
+        '<td rowspan="' || x.FACILITIES_NAME_ROWSPAN || '">' ||
+        TO_CHAR(x.FACILITIES_TOTAL,'999G999G999G999G999G999G990') ||
+        '</td>'
+    );
+END IF;
+htp.p('</tr>');
+
+PREV_FACILITIES_NAME := x.FACILITIES_NAME;
+PREV_MONTH_GROUP     := x.MONTH_GROUP;
+
+END LOOP;
+IF v_prev_category IS NOT NULL THEN
+htp.p('<tr class="total-row" style="background-color:#9FC5E8; font-weight:bold;">');
+htp.p('<td colspan="16" style="text-align:right; padding:8px;">Total:</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_product_net_amount_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_cash_margin_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_remaining_payable_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td ></td>');
+
+htp.p('</tr>');
+htp.p('</tbody>');
+htp.p('<tr class="grand-total-row" style="background-color:#9FC5E8; font-weight:bold; font-size:10px;">');
+htp.p('<td colspan="16" style="text-align:right; padding:8px;">Grand Total:</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_grand_product_net_amount_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_grand_cash_margin_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td style="text-align:right;">' || TO_CHAR(v_grand_remaining_payable_sum,'999G999G999G999G999G999G990') || '</td>');
+htp.p('<td ></td>');
+
+htp.p('</tr>');
+END IF;
+END;
+htp.p('</table>');
+
+htp.p('<table id="t10">');
+htp.p('<tr><th colspan="5" class="header">Financial Cussion Available</th></tr>');
+DECLARE
+v_prev_bank VARCHAR2(200) := NULL;
+
+v_bank_total_amount NUMBER := 0;
+v_bank_total_availed NUMBER := 0;
+v_bank_total_cussion NUMBER := 0;
+
+v_grand_total_amount_sum NUMBER := 0;
+v_grand_availed_amount_sum NUMBER := 0;
+v_grand_cussion_available_sum NUMBER := 0;
+
+BEGIN
+    htp.p('<tr>');
+    htp.p('<th style="width:25%; background-color:#9FC5E8;">Bank Name</th>');
+    htp.p('<th style="width:25%; background-color:#9FC5E8;">Facilities Name</th>');
+    htp.p('<th style="width:20%; background-color:#9FC5E8;">Total Amount</th>');
+    htp.p('<th style="width:15%; background-color:#9FC5E8;">Availed Amount</th>');
+    htp.p('<th style="width:15%; background-color:#9FC5E8;">Cussion Available</th>');
+    htp.p('</tr>');
+    htp.p('<tbody>');
+
+FOR x IN (
+    SELECT 
+        BANK_NAME, 
+        FACILITIES_NAME, 
+        TOTAL_AMOUNT, 
+        AVAILED_AMOUNT, 
+        CUSSION_AVAILABLE
+    FROM TABLE(Financial_Caussion_Available_FUN(:GV_ORG_ID, NULL, NULL))
+    ORDER BY BANK_NAME, FACILITIES_NAME
+)
+LOOP
+    IF v_prev_bank IS NULL OR v_prev_bank <> x.BANK_NAME THEN
+        IF v_prev_bank IS NOT NULL THEN
+            htp.p('<tr class="bank-total-row" style="background-color:#f8f9fa; font-weight:bold;">');
+            htp.p('<td colspan="2" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || v_prev_bank || ' Total:</b></td>');
+            htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_amount,'999G999G999G990D00') || '</td>');
+            htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_availed,'999G999G999G990D00') || '</td>');
+            htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_cussion,'999G999G999G990D00') || '</td>');
+            htp.p('</tr>');
+        END IF;
+        
+        v_bank_total_amount := 0;
+        v_bank_total_availed := 0;
+        v_bank_total_cussion := 0;
+        
+        htp.p('<tr class="bank-header" style="background-color:#e9ecef; font-weight:bold;">');
+        htp.p('<td colspan="5" style="padding:6px; text-align:left; border:1px solid #ccc; color:#0066cc;">');
+        htp.p('<i class="fa fa-university"></i> ' || x.BANK_NAME);
+        htp.p('</td>');
+        htp.p('</tr>');
+
+        v_prev_bank := x.BANK_NAME;
+    END IF;
+
+    v_bank_total_amount := v_bank_total_amount + NVL(x.TOTAL_AMOUNT, 0);
+    v_bank_total_availed := v_bank_total_availed + NVL(x.AVAILED_AMOUNT, 0);
+    v_bank_total_cussion := v_bank_total_cussion + NVL(x.CUSSION_AVAILABLE, 0);
+    
+    v_grand_total_amount_sum := v_grand_total_amount_sum + NVL(x.TOTAL_AMOUNT, 0);
+    v_grand_availed_amount_sum := v_grand_availed_amount_sum + NVL(x.AVAILED_AMOUNT, 0);
+    v_grand_cussion_available_sum := v_grand_cussion_available_sum + NVL(x.CUSSION_AVAILABLE, 0);
+
+    htp.p('<tr>');
+    htp.p('<td style="padding:4px; text-align:left; border:1px solid #ccc;"></td>'); -- Empty cell for Bank Name
+    htp.p('<td style="padding:4px; text-align:left; border:1px solid #ccc;">' || x.FACILITIES_NAME || '</td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(x.TOTAL_AMOUNT,'999G999G999G990D00') || '</td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(x.AVAILED_AMOUNT,'999G999G999G990D00') || '</td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(x.CUSSION_AVAILABLE,'999G999G999G990D00') || '</td>');
+    htp.p('</tr>');
+END LOOP;
+
+IF v_prev_bank IS NOT NULL THEN
+    htp.p('<tr class="bank-total-row" style="background-color:#f8f9fa; font-weight:bold;">');
+    htp.p('<td colspan="2" style="padding:4px; text-align:right; border:1px solid #ccc;"><b>' || v_prev_bank || ' Total:</b></td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_amount,'999G999G999G990D00') || '</td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_availed,'999G999G999G990D00') || '</td>');
+    htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_bank_total_cussion,'999G999G999G990D00') || '</td>');
+    htp.p('</tr>');
+END IF;
+
+htp.p('<tr class="grand-total-row" style="background-color:#d4edda; font-weight:bold; border-top:2px solid #28a745;">');
+htp.p('<td colspan="2" style="padding:6px; text-align:right; border:1px solid #ccc;"><b>Grand Total:</b></td>');
+htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_grand_total_amount_sum,'999G999G999G990D00') || '</td>');
+htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_grand_availed_amount_sum,'999G999G999G990D00') || '</td>');
+htp.p('<td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(v_grand_cussion_available_sum,'999G999G999G990D00') || '</td>');
+htp.p('</tr>');
+
+htp.p('</tbody>');
+END;
+htp.p('</table></table></div></body></html>');
+END;
