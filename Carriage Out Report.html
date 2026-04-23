@@ -8,6 +8,11 @@ DECLARE
      v_sum_debit   NUMBER := 0;
     v_sum_credit  NUMBER := 0;
     v_sum_balance NUMBER := 0;
+    v_prev_item VARCHAR2(500) := NULL;
+    v_item_dr_total   NUMBER := 0;
+    v_item_cr_total   NUMBER := 0;
+    v_grand_dr_total  NUMBER := 0;
+    v_grand_cr_total  NUMBER := 0;
 BEGIN
   -- Employee Name Fetch
 --   BEGIN
@@ -52,7 +57,7 @@ BEGIN
         function printDiv(printpage) {
           adjustColumnWidth();
           var headstr = "<html><head><title></title><style>";
-          headstr += "@page { size: A4 landscape; margin: 10mm; }";
+          headstr += "@page { size: A3 landscape; margin: 10mm; }";
           headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
           headstr += ".button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }";
           headstr += ".button1 { font-size: 16px; }";
@@ -62,7 +67,8 @@ BEGIN
           headstr += ".separator { border-top: 1px solid black; }";
           headstr += "h4 { background-color:#000080; color:white;  padding:5px; margin:0; font-size:13px; text-align:left; }";
           headstr += "h3 { margin: 0; display: flex; align-items: center; justify-content: center; background-color:#000080;   -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
-          headstr += "@media print { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
+          
+          
           headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }";
           headstr += "#div_print1 { margin: 0; padding: 0; }";
           headstr += "</style></head><body>";
@@ -75,7 +81,7 @@ BEGIN
           return false;
         }
       </script>');
-
+                         --- LINE NO 66 @media print headstr += " { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
   -- Print Button + Header
   htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>');
   htp.p('<div id="all_reports">');
@@ -94,6 +100,28 @@ BEGIN
 );
 
   htp.p('<h3 style = "color: white;">Carriage out Report</h3>');
+
+
+      htp.p('<table style="width:100%; border-collapse:collapse;">
+               <thead><tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;">
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7; ">Voucher No</th>
+                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Name</th>
+                
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Vehicle No</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bility No</th>
+                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Date</th>
+                 
+                 <th style="width:19%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Narrations</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Dr Amount</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cr Amount</th>
+                
+               </tr>
+               </thead>');
+
+    
+    -- <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Account Title</th>
+
+--  <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Balance</th>
 
   -- Main Cursor with grouping
   FOR rec IN (
@@ -169,7 +197,11 @@ FROM
 
         WHERE C.ACCOUNT_ID = 2102
         AND C.VOUCHER_NAME IS NOT NULL
-        ORDER BY C.VOUCHER_DATE DESC
+        AND TRUNC(C.VOUCHER_DATE) BETWEEN NVL(TO_DATE(:P1142_FROM_DATE, 'DD-MON-YYYY'), TRUNC(C.VOUCHER_DATE))
+        AND  NVL(TO_DATE(:P1142_TO_DATE, 'DD-MON-YYYY'), TRUNC(C.VOUCHER_DATE))
+        ORDER BY 
+    ITEM_NAME, 
+    C.VOUCHER_DATE DESC
   ) LOOP
 
    
@@ -177,43 +209,79 @@ FROM
 
 
 
+IF v_prev_item IS NULL OR v_prev_item <> rec.ITEM_NAME THEN
 
-      htp.p('<table style="width:100%; border-collapse:collapse;">
-               <tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;">
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7; ">Voucher No</th>
-                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Name</th>
-                 <th style="width:7%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Product Name</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Vehicle No</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bility No</th>
-                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Date</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Account Title</th>
-                 <th style="width:19%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Narrations</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Dr Amount</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cr Amount</th>
-                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Balance</th>
-               </tr>');
+   -- Previous product total print (skip first time)
+   IF v_prev_item IS NOT NULL THEN
+      htp.p('<tr style="font-weight:bold;">
+                <td colspan="6" style="text-align:right;background-color:#ddd; color:black;">Product Total:</td>
+                <td style="text-align:right;">' || TO_CHAR(v_item_dr_total,'999G999G990D00') || '</td>
+                <td style="text-align:right;">' || TO_CHAR(v_item_cr_total,'999G999G990D00') || '</td>
+             </tr>');
+   END IF;
+
+   -- reset item totals
+   v_item_dr_total := 0;
+   v_item_cr_total := 0;
+
+   -- group header
+   htp.p('<tr style="background-color:#ddd;">
+            <td colspan="8" style="font-weight:bold; padding:6px;">
+                PRODUCT: ' || rec.ITEM_NAME || '
+            </td>
+          </tr>');
+
+   v_prev_item := rec.ITEM_NAME;
+
+END IF;
+
+
+   --- total sum --
+v_item_dr_total  := v_item_dr_total + NVL(rec.DR_AMOUNT,0);
+v_item_cr_total  := v_item_cr_total + NVL(rec.CR_AMOUNT,0);
+
+v_grand_dr_total := v_grand_dr_total + NVL(rec.DR_AMOUNT,0);
+v_grand_cr_total := v_grand_cr_total + NVL(rec.CR_AMOUNT,0);
+  
+
+    -- Table start (ONLY ONCE)
+
   
   
 
     -- Employee Row
-    htp.p(  '<tr>
-             <td style="padding:4px; text-align:center;border:1px solid #ccc;">' || rec.VOUCHER_NO || '</td>
-             <td style="padding:4px; border:1px solid #ccc;">' || rec.VOUCHER_NAME || '</td>
-             <td style="padding:4px; border:1px solid #ccc;">' || rec.ITEM_NAME || '</td>
-             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.VEHICLE_NO || '</td>
+    htp.p(  ' <tr>
+             <td style="padding:4px; text-align:right;border:1px solid #ccc;">' || rec.VOUCHER_NO || '</td>
+             <td style="padding:4px;  text-align:left; border:1px solid #ccc;">' || rec.VOUCHER_NAME || '</td>
+             <td style="padding:4px; text-align:left; border:1px solid #ccc;">' || rec.VEHICLE_NO || '</td>
              <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.BILITY_NO || '</td>
-             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.VOUCHER_DATE || '</td>
-             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.ACCOUNT_TITLE || '</td>
-             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.NARRATIONS || '</td>
+             <td style="padding:4px; text-align:center; border:1px solid #ccc;">' || rec.VOUCHER_DATE || '</td>
+             
+             <td style="padding:4px; text-align:left; border:1px solid #ccc;">' || rec.NARRATIONS || '</td>
              <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.DR_AMOUNT,'999G999G990D00') || '</td>
              <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.CR_AMOUNT,'999G999G990D00') || '</td>
-               <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.BALANCE,'999G999G990D00') || '</td>
+         
             </tr>');
-
+    --  <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.ACCOUNT_TITLE || '</td>
+--   <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.BALANCE,'999G999G990D00') || '</td>
 
    
 
   END LOOP;
+
+  -- last product total
+htp.p('<tr style="background:#green;color:#white;font-weight:bold;">
+        <td colspan="6" style="text-align:right;">Product Total:</td>
+        <td style="text-align:right;">' || TO_CHAR(v_item_dr_total,'999G999G990D00') || '</td>
+        <td style="text-align:right;">' || TO_CHAR(v_item_cr_total,'999G999G990D00') || '</td>
+       </tr>');
+
+-- grand total
+htp.p('<tr style="background:#black;color:#white;font-weight:bold;">
+        <td colspan="6" style="text-align:right;">GRAND TOTAL:</td>
+        <td style="text-align:right;">' || TO_CHAR(v_grand_dr_total,'999G999G990D00') || '</td>
+        <td style="text-align:right;">' || TO_CHAR(v_grand_cr_total,'999G999G990D00') || '</td>
+       </tr>');
 
    
 
