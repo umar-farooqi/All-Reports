@@ -1,0 +1,221 @@
+DECLARE
+  v_tax_liability NUMBER := 0;
+  v_inv_net_amount NUMBER := 0;
+  v_inv_bags NUMBER := 0;
+  v_cprn_payments NUMBER := 0;
+  v_emp_name VARCHAR2(200);
+  v_prev_sub_type VARCHAR2(500) := NULL;
+     v_sum_debit   NUMBER := 0;
+    v_sum_credit  NUMBER := 0;
+    v_sum_balance NUMBER := 0;
+BEGIN
+  -- Employee Name Fetch
+--   BEGIN
+--     SELECT NAME INTO v_emp_name
+--     FROM HR_EMPLOYEE_REGISTRATION
+--     WHERE HRMIS_CODE = :P855_EMP_CODE AND ROWNUM = 1;
+--   EXCEPTION
+--     WHEN NO_DATA_FOUND THEN
+--       v_emp_name := NULL;
+--   END;
+
+  
+  -- JavaScript for printing and adjusting column widths
+ htp.p('<script>
+        function adjustColumnWidth() {
+          var table = document.querySelector("table");
+          var itemNameColumnIndex = 1; // Index for ITEM NAME column
+          var maxWidth = 0;
+          var rows = table.querySelectorAll("tbody tr");
+          
+          rows.forEach(function(row) {
+            var itemNameCell = row.cells[itemNameColumnIndex];
+            if (itemNameCell) {
+              var cellWidth = itemNameCell.scrollWidth;
+              if (cellWidth > maxWidth) {
+                maxWidth = cellWidth;
+              }
+            }
+          });
+          
+          var header = table.querySelector("thead th.item-name-column");
+          if (header) {
+            header.style.width = maxWidth + "px";
+          }
+          
+          var dataCells = table.querySelectorAll("tbody td.item-name-column");
+          dataCells.forEach(function(cell) {
+            cell.style.width = maxWidth + "px";
+          });
+        }
+       
+        function printDiv(printpage) {
+          adjustColumnWidth();
+          var headstr = "<html><head><title></title><style>";
+          headstr += "@page { size: A4 landscape; margin: 10mm; }";
+          headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
+          headstr += ".button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }";
+          headstr += ".button1 { font-size: 16px; }";
+          headstr += "table { border-collapse: collapse; width: 100%; margin: 0; padding: 0; }";
+          headstr += "th, td { text-align: left; padding: 3px; font-size: 10px; line-height: 1.1; }";
+          headstr += "th { background-color: rgba(146, 208, 80, 0.237); -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += ".separator { border-top: 1px solid black; }";
+          headstr += "h4 { background-color:#000080; color:white;  padding:5px; margin:0; font-size:13px; text-align:left; }";
+          headstr += "h3 { margin: 0; display: flex; align-items: center; justify-content: center; background-color:#000080;   -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += "@media print { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
+          headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }";
+          headstr += "#div_print1 { margin: 0; padding: 0; }";
+          headstr += "</style></head><body>";
+          var footstr = "</body></html>";
+          var newstr = document.getElementById(printpage).innerHTML;
+          var oldstr = document.body.innerHTML;
+          document.body.innerHTML = headstr + newstr + footstr;
+          window.print();
+          document.body.innerHTML = oldstr;
+          return false;
+        }
+      </script>');
+
+  -- Print Button + Header
+  htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>');
+  htp.p('<div id="all_reports">');
+
+--   htp.p('<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+--             <h2 style="margin:0; font-size:20px;">IBRAHIM TRADERS</h2>
+--             <img src="#APP_FILES#WhatsApp Image 2025-08-21 at 11.35.38 AM.jpeg" alt="Logo" style="height:40px;">
+--          </div>');
+
+ htp.p(
+    '<div style="font-family: Arial; font-size:13px; padding:6px;"> 
+        <b>From Date:</b> ' || :P1142_FROM_DATE || ' 
+        <b>To Date:</b> ' || :P1142_TO_DATE || '
+        <span style="float: right;"><b>Print By:</b> ' || :APP_USER || '</span>
+    </div>'
+);
+
+  htp.p('<h3 style = "color: white;">Carriage out Report</h3>');
+
+  -- Main Cursor with grouping
+  FOR rec IN (
+   WITH ITEM_NAME AS (
+    SELECT
+        AFT.TR_ID AS TR_ID, 
+        AFT.VOUCHER_NAME,
+        AFTDS.TRD_ID AS TRD_ID_LVL1, 
+        AFTDD.TRD_ID AS TRD_ID_LVL2,
+        AFTDD.ITEM_IDD, 
+        ITM.ITEM_NAME||' ('|| ITM.PACKING_SIZE || ' '|| ITM.UNIT || ' '|| ITM.PACKING || ')' AS ITEM_NAME
+    FROM AB_FIN_TRANSACTION AFT
+    JOIN AB_FIN_TRANSACTION_DET AFTD  ON AFTD.TR_ID = AFT.TR_ID
+    JOIN AB_FIN_TRANSACTION_DET AFTDS ON AFTDS.TRD_ID = AFTD.TRD_IDS
+    JOIN AB_FIN_TRANSACTION_DET AFTDD ON AFTDD.TRD_ID = AFTDS.TRD_IDS
+    LEFT JOIN AB_ITEMS_MASTER ITM ON ITM.ITEM_ID = AFTDD.ITEM_IDD
+    WHERE 
+       -- AFT.TR_TYPE = 628
+    AFT.VOUCHER_TYPE_ID = 611
+      AND AFT.STATUS = 'Y'
+    GROUP BY 
+        AFT.VOUCHER_NAME,
+        AFTDS.TRD_ID,
+        AFTDD.TRD_ID,
+        AFTDD.ITEM_IDD,
+        AFT.TR_ID,
+        ITM.ITEM_NAME,
+        ITM.ITEM_NAME, ITM.PACKING_SIZE, ITM.UNIT, ITM.PACKING
+)
+
+SELECT
+    C.VOUCHER_NO,
+    C.TRANSCATION_IDD,
+    TO_CHAR(C.VOUCHER_DATE,'DD-MON-YYYY') AS VOUCHER_DATE,
+    C.VOUCHER_NAME,
+    C.VOUCHER_TYPE_ID,
+    C.ACCOUNT_ID,
+    C.ACCOUNT_TITLE,
+    C.NARRATIONS,
+    C.DR_AMOUNT,
+    C.CR_AMOUNT,
+    C.BALANCE,
+    CASE  
+    WHEN C.VOUCHER_TYPE_ID = 611 
+    THEN ITM2.ITEM_NAME 
+    
+    WHEN C.VOUCHER_TYPE_ID <> 611 
+    THEN 
+        ITM.ITEM_NAME || ' (' || 
+        ITM.PACKING_SIZE || ' ' || ITM.UNIT || ' ' || ITM.PACKING || ')'
+    ELSE NULL 
+END AS ITEM_NAME,
+ITM2.ITEM_NAME as product_name,
+     --NVL((ITM.ITEM_NAME||' ('|| ITM.PACKING_SIZE || ' '|| ITM.UNIT || ' '|| ITM.PACKING || ')'),ITM2.ITEM_NAME) AS ITEM_NAME,
+    REGEXP_SUBSTR(C.NARRATIONS, 'Vehicle\s*#\s*([^,]+)', 1, 1, NULL, 1) AS VEHICLE_NO,
+   REGEXP_SUBSTR(C.NARRATIONS, 'Bility\s*No\s*(\d+)', 1, 1, NULL, 1) AS BILITY_NO,
+   C.VOUCHER_DATE as Date_order
+   
+FROM
+    TABLE (
+        AB_FINANCE_REPORTS.ACCOUNT_WISE_LEDGER1(
+            NVL(:GV_ORG_ID,1006),
+            :P1142_ACCOUNT_NAME,
+            TO_DATE(:P1142_FROM_DATE, 'DD-MON-YYYY'),
+            TO_DATE(:P1142_TO_DATE,   'DD-MON-YYYY')
+        )
+    ) C
+        LEFT JOIN AB_FIN_TRANSACTION AFT ON     AFT.TR_ID = C.VOUCHER_NO
+        LEFT JOIN AB_SO_ORDER_DET ASOD ON ASOD.SO_ID = AFT.TR_IDS
+        LEFT JOIN  AB_SO_ORDER_DET ASODD ON ASODD.SOD_ID = ASOD.SOD_IDS
+        LEFT JOIN AB_ITEMS_MASTER ITM ON ITM.ITEM_ID = ASODD.ITEM_ID 
+        LEFT JOIN ITEM_NAME ITM2 ON ITM2.TR_ID = C.VOUCHER_NO
+
+        WHERE C.ACCOUNT_ID = 2102
+        AND C.VOUCHER_NAME IS NOT NULL
+        ORDER BY C.VOUCHER_DATE DESC
+  ) LOOP
+
+   
+
+
+
+
+
+      htp.p('<table style="width:100%; border-collapse:collapse;">
+               <tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;">
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7; ">Voucher No</th>
+                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Name</th>
+                 <th style="width:7%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Product Name</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Vehicle No</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bility No</th>
+                 <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Date</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Account Title</th>
+                 <th style="width:19%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Narrations</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Dr Amount</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Cr Amount</th>
+                 <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Balance</th>
+               </tr>');
+  
+  
+
+    -- Employee Row
+    htp.p(  '<tr>
+             <td style="padding:4px; text-align:center;border:1px solid #ccc;">' || rec.VOUCHER_NO || '</td>
+             <td style="padding:4px; border:1px solid #ccc;">' || rec.VOUCHER_NAME || '</td>
+             <td style="padding:4px; border:1px solid #ccc;">' || rec.ITEM_NAME || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.VEHICLE_NO || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.BILITY_NO || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.VOUCHER_DATE || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.ACCOUNT_TITLE || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || rec.NARRATIONS || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.DR_AMOUNT,'999G999G990D00') || '</td>
+             <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.CR_AMOUNT,'999G999G990D00') || '</td>
+               <td style="padding:4px; text-align:right; border:1px solid #ccc;">' || TO_CHAR(rec.BALANCE,'999G999G990D00') || '</td>
+            </tr>');
+
+
+   
+
+  END LOOP;
+
+   
+
+  htp.p('</table></div>');
+END;
