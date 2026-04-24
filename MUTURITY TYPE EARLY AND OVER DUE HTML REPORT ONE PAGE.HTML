@@ -1,0 +1,344 @@
+DECLARE
+  v_tax_liability NUMBER := 0;
+  v_inv_net_amount NUMBER := 0;
+  v_inv_bags NUMBER := 0;
+  v_cprn_payments NUMBER := 0;
+  v_emp_name VARCHAR2(200);
+  v_prev_sub_type VARCHAR2(500) := NULL;
+     v_sum_debit   NUMBER := 0;
+    v_sum_credit  NUMBER := 0;
+    v_sum_balance NUMBER := 0;
+    v_prev_item VARCHAR2(500) := NULL;
+    v_item_dr_total   NUMBER := 0;
+    v_item_cr_total   NUMBER := 0;
+    v_grand_dr_total  NUMBER := 0;
+    v_grand_cr_total  NUMBER := 0;
+BEGIN
+
+  
+  -- JavaScript for printing and adjusting column widths
+ htp.p('<script>
+        function adjustColumnWidth() {
+          var table = document.querySelector("table");
+          var itemNameColumnIndex = 1; // Index for ITEM NAME column
+          var maxWidth = 0;
+          var rows = table.querySelectorAll("tbody tr");
+          
+          rows.forEach(function(row) {
+            var itemNameCell = row.cells[itemNameColumnIndex];
+            if (itemNameCell) {
+              var cellWidth = itemNameCell.scrollWidth;
+              if (cellWidth > maxWidth) {
+                maxWidth = cellWidth;
+              }
+            }
+          });
+          
+          var header = table.querySelector("thead th.item-name-column");
+          if (header) {
+            header.style.width = maxWidth + "px";
+          }
+          
+          var dataCells = table.querySelectorAll("tbody td.item-name-column");
+          dataCells.forEach(function(cell) {
+            cell.style.width = maxWidth + "px";
+          });
+        }
+       
+        function printDiv(printpage) {
+          adjustColumnWidth();
+          var headstr = "<html><head><title></title><style>";
+          headstr += "@page { size: A3 landscape; margin: 10mm; }";
+          headstr += "body { margin: 0; padding: 0; font-family: Arial, sans-serif; }";
+          headstr += ".button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }";
+          headstr += ".button1 { font-size: 16px; }";
+          headstr += "table { border-collapse: collapse; width: 100%; margin: 0; padding: 0; }";
+          headstr += "th, td { text-align: left; padding: 3px; font-size: 10px; line-height: 1.1; }";
+          headstr += "th { background-color: rgba(146, 208, 80, 0.237); -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          headstr += ".separator { border-top: 1px solid black; }";
+          headstr += "h4 { background-color:#000080; color:white;  padding:5px; margin:0; font-size:13px; text-align:left; }";
+          headstr += "h3 { margin: 0; display: flex; align-items: center; justify-content: center; background-color:#000080;   -webkit-print-color-adjust: exact; print-color-adjust: exact; }";
+          
+          
+          headstr += "h2 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; padding: 0; text-align: center; }";
+          headstr += "#div_print1 { margin: 0; padding: 0; }";
+          headstr += "</style></head><body>";
+          var footstr = "</body></html>";
+          var newstr = document.getElementById(printpage).innerHTML;
+          var oldstr = document.body.innerHTML;
+          document.body.innerHTML = headstr + newstr + footstr;
+          window.print();
+          document.body.innerHTML = oldstr;
+          return false;
+        }
+      </script>');
+                         --- LINE NO 66 @media print headstr += " { thead {display: table-header-group;} tfoot {display: table-footer-group;} }";
+  -- Print Button + Header
+  htp.p('<button class="button" onclick="printDiv(''all_reports'')">Print Reports</button>');
+  htp.p('<div id="all_reports">');
+
+htp.p(
+'<div style="font-family: Arial; font-size:13px; padding:6px; display:flex; justify-content:space-between; align-items:center;">
+    
+    <div></div>  <!-- left side empty rakha taake right align ho -->
+    
+    <div><b>Print By:</b> ' || :APP_USER || '</div>
+
+</div>'
+);
+
+  htp.p('<h3 style = "color: white;">Bank Maturity Payment History (Over Due Paid)</h3>');
+
+
+      htp.p('<table style="width:100%; border-collapse:collapse;">
+               <thead><tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;">
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7; ">Facilities Name</th>
+          <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Document#</th>
+          <th style="width:9%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bank Name</th>
+          <th style="width:7%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Beneficial Company</th>
+          <th style="width:8%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Agency Name</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Issue Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Expire Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Day</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Date</th>
+          <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Amount</th>
+          <th style="width:2%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Overdue Aging</th>
+          <th style="width:8%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remarks</th>
+                
+               </tr>
+               </thead>');
+
+  FOR rec IN (
+SELECT   FACILITIES_NAME,
+            BG_NUMBER,
+            BANK_NAME,
+            BENEFICIAL_COMPANY,
+            AGENCY_NAME,   
+            BG_ISSU_DATE,
+            BG_EXPIRE_DATE,
+            PAYMENT_DATE,
+            DUE_DAY,
+            VOUCHER_DATE,
+            AMOUNT,
+            OVERDUE_AGING,
+            REMARKS,
+            FACILITIES_TYPE,
+            VOUCHER_NO
+FROM TABLE(over_due_bank_muturiy(:GV_ORG_ID))
+  ) LOOP
+
+
+IF v_prev_item IS NULL OR v_prev_item <> rec.FACILITIES_NAME THEN
+
+   -- Previous product total print (skip first time)
+   IF v_prev_item IS NOT NULL THEN
+      htp.p('<tr style="font-weight:bold;">
+                <td colspan="10" style="text-align:right;background-color:#ddd; color:black;">Facilities Total:</td>
+                <td style="text-align:right;">' || TO_CHAR(v_item_dr_total,'999G999G990D00') || '</td>
+             </tr>');
+   END IF;
+   
+   -- reset item totals
+   v_item_dr_total := 0;
+ 
+   -- group header
+   htp.p('<tr style="background-color:#ddd;">
+            <td colspan="13" style="font-weight:bold; padding:6px;">
+                Facilities: ' || rec.FACILITIES_NAME || '
+            </td>
+          </tr>');
+
+   v_prev_item := rec.FACILITIES_NAME;
+
+END IF;
+
+
+-- -- total sum (only once)
+-- v_item_dr_total  := v_item_dr_total + NVL(rec.AMOUNT,0);
+-- v_grand_dr_total := v_grand_dr_total + NVL(rec.AMOUNT,0);
+                   
+    htp.p(  ' <tr>
+             <td style="padding:4px; text-align:left;border:1px solid #ccc;">' || rec.FACILITIES_NAME || '</td>
+             <td style="padding:4px;  text-align:left; border:1px solid #ccc;">' || rec.BG_NUMBER || '</td>
+             <td style="padding:4px; text-align:left; border:1px solid #ccc;">' || rec.BANK_NAME || '</td>
+             <td style="padding:4px; text-align:left;border:1px solid #ccc;">' || rec.BENEFICIAL_COMPANY || '</td>
+             <td style="padding:4px; text-align:left;border:1px solid #ccc;">' || rec.AGENCY_NAME || '</td>
+             <td style="padding:4px;  text-align:center; border:1px solid #ccc;">' || TO_CHAR(rec.BG_ISSU_DATE,'DD-MON-YYYY') || '</td>
+             <td style="padding:4px; text-align:center; border:1px solid #ccc;">' || TO_CHAR(rec.BG_EXPIRE_DATE,'DD-MON-YYYY') || '</td>
+             <td style="padding:4px; text-align:center;border:1px solid #ccc;">' || TO_CHAR(rec.PAYMENT_DATE,'DD-MON-YYYY') || '</td>
+             <td style="padding:4px;  text-align:left; border:1px solid #ccc;">' || rec.DUE_DAY || '</td>
+             <td style="padding:4px; text-align:center; border:1px solid #ccc;">' || TO_CHAR(rec.VOUCHER_DATE,'DD-MON-YYYY') || '</td>
+             <td style="padding:4px; text-align:right;border:1px solid #ccc;">' || TO_CHAR(rec.AMOUNT,'99G99G99G990') || '</td>
+             <td style="padding:4px;  text-align:right; border:1px solid #ccc;">' || rec.OVERDUE_AGING || '</td>
+             <td style="padding:4px; text-align:left; border:1px solid #ccc;">' || rec.REMARKS || '</td>
+          
+         
+            </tr>');
+   
+  v_item_dr_total  := v_item_dr_total + NVL(rec.AMOUNT,0);
+  v_grand_dr_total := v_grand_dr_total + NVL(rec.AMOUNT,0);
+  v_prev_sub_type := rec.FACILITIES_NAME;
+
+  END LOOP;
+
+-- Last group subtotal
+htp.p('<tr style="font-weight:bold; background:#f2f2f2;">
+         <td colspan="10" style="text-align:right;">Facilities Total:</td>
+         <td style="text-align:right;">' || TO_CHAR(v_item_dr_total,'99G99G99G990') || '</td>
+         <td colspan="2"></td>
+       </tr>');
+
+htp.p('<tr style="font-weight:bold; background:#d9edf7;">
+         <td colspan="10" style="text-align:right;">Grand Total:</td>
+         <td style="text-align:right;"><b>' || 
+             TO_CHAR(v_grand_dr_total,'FM999G999G999G999G999') || 
+         '</b></td>
+         <td colspan="2"></td>
+       </tr>');
+
+  htp.p('</table>');
+
+
+
+--////////////////////////////////////////////////////////////////////////////////////
+--///////////////////////////////////////////////////////////////////////////////////
+
+-- RESET VARIABLES
+v_prev_item := NULL;
+v_item_dr_total := 0;
+v_grand_dr_total := 0;
+
+-- htp.p('<tr>
+--         <th colspan="13" background:#000080;color:white; padding:8px;font-size:14px;">
+--             Bank Maturity Payment History (Early Paid)
+--         </th>
+--        </tr>');
+
+        htp.p('<h3 style = "color: white;"> Bank Maturity Payment History (Early Paid)</h3>');
+ 
+
+htp.p('<table style="width:100%; border-collapse:collapse; align-items: center; justify-content: center; margin-top:15px;">');
+
+
+
+-- HEADER
+-- htp.p('<thead>
+-- <tr style="background:#B4C6E7; font-weight:bold;">
+--   <th style="border:1px solid #000;padding:5px;">Facilities Name</th>
+--   <th style="border:1px solid #000;padding:5px;">Document#</th>
+--   <th style="border:1px solid #000;padding:5px;">Bank Name</th>
+--   <th style="border:1px solid #000;padding:5px;">Beneficial Company</th>
+--   <th style="border:1px solid #000;padding:5px;">Agency Name</th>
+--   <th style="border:1px solid #000;padding:5px;">Issue Date</th>
+--   <th style="border:1px solid #000;padding:5px;">Expire Date</th>
+--   <th style="border:1px solid #000;padding:5px;">Due Date</th>
+--   <th style="border:1px solid #000;padding:5px;">Due Day</th>
+--   <th style="border:1px solid #000;padding:5px;">Voucher Date</th>
+--   <th style="border:1px solid #000;padding:5px;">Amount</th>
+--   <th style="border:1px solid #000;padding:5px;">Overdue Aging</th>
+--   <th style="border:1px solid #000;padding:5px;">Remarks</th>
+-- </tr>
+-- </thead>');
+
+
+ htp.p('<table style="width:100%; border-collapse:collapse;">
+               <thead><tr style="background-color:rgba(146,208,80,0.237); font-weight:bold; border:1px solid #000;">
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7; ">Facilities Name</th>
+          <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Document#</th>
+          <th style="width:9%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Bank Name</th>
+          <th style="width:7%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Beneficial Company</th>
+          <th style="width:8%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Agency Name</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Issue Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Expire Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Date</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Due Day</th>
+          <th style="width:5%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Voucher Date</th>
+          <th style="width:6%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Amount</th>
+          <th style="width:2%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Overdue Aging</th>
+          <th style="width:8%; padding:5px; text-align:center; border:1px solid #000; background-color: #B4C6E7;">Remarks</th>
+                
+               </tr>
+               </thead>');
+
+FOR rec IN (
+    SELECT *
+    FROM TABLE(Early_PAID_BANK_MUTURITY(:GV_ORG_ID))
+) LOOP
+
+    -- GROUP HEADER
+    IF v_prev_item IS NULL OR v_prev_item <> rec.FACILITIES_NAME THEN
+
+        -- SUBTOTAL PRINT
+        IF v_prev_item IS NOT NULL THEN
+            htp.p('<tr style="background:#eee;font-weight:bold;">
+                    <td colspan="10" style="text-align:right;border:1px solid #000;">
+                        Facilities Total:
+                    </td>
+                    <td style="text-align:right;border:1px solid #000;">
+                        ' || TO_CHAR(v_item_dr_total,'FM999G999G999G999G999') || '
+                    </td>
+                    <td colspan="2" style="border:1px solid #000;"></td>
+                   </tr>');
+        END IF;
+
+        v_item_dr_total := 0;
+
+        -- GROUP HEADER ROW
+        htp.p('<tr style="background:#ddd;">
+                <td colspan="13" style="padding:6px;font-weight:bold;border:1px solid #000;">
+                    Facilities: ' || rec.FACILITIES_NAME || '
+                </td>
+               </tr>');
+
+        v_prev_item := rec.FACILITIES_NAME;
+    END IF;
+
+    -- DATA ROW
+    htp.p('<tr>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.FACILITIES_NAME || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.BG_NUMBER || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.BANK_NAME || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.BENEFICIAL_COMPANY || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.AGENCY_NAME || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:center;">' || TO_CHAR(rec.BG_ISSU_DATE,'DD-MON-YYYY') || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:center;">' || TO_CHAR(rec.BG_EXPIRE_DATE,'DD-MON-YYYY') || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:center;">' || TO_CHAR(rec.PAYMENT_DATE,'DD-MON-YYYY') || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.DUE_DAY || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:center;">' || TO_CHAR(rec.VOUCHER_DATE,'DD-MON-YYYY') || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:right;">' || TO_CHAR(rec.AMOUNT,'99G99G99G99G99G99G99G99G99G990') || '</td>
+        <td style="border:1px solid #ccc;padding:4px;text-align:right;">' || rec.OVERDUE_AGING || '</td>
+        <td style="border:1px solid #ccc;padding:4px;">' || rec.REMARKS || '</td>
+    </tr>');
+
+    -- SUM
+    v_item_dr_total  := v_item_dr_total + NVL(rec.AMOUNT,0);
+    v_grand_dr_total := v_grand_dr_total + NVL(rec.AMOUNT,0);
+
+END LOOP;
+
+-- LAST SUBTOTAL
+htp.p('<tr style="background:#f2f2f2;font-weight:bold;">
+        <td colspan="10" style="text-align:right;border:1px solid #000;">
+            Facilities Total:
+        </td>
+        <td style="text-align:right;border:1px solid #000;">
+            ' || TO_CHAR(v_item_dr_total,'FM999G999G999G999G999') || '
+        </td>
+        <td colspan="2"></td>
+       </tr>');
+
+-- GRAND TOTAL
+htp.p('<tr style="background:#d9edf7;font-weight:bold;">
+        <td colspan="10" style="text-align:right;border:1px solid #000;">
+            Grand Total:
+        </td>
+        <td style="text-align:right;border:1px solid #000;">
+            <b>' || TO_CHAR(v_grand_dr_total,'FM999G999G999G999G999') || '</b>
+        </td>
+        <td colspan="2"></td>
+       </tr>');
+
+htp.p('</table>');
+htp.p('</div>');
+end;
