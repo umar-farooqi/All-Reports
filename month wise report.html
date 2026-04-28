@@ -1,0 +1,190 @@
+DECLARE
+    v_sql          CLOB;
+    v_start_month  VARCHAR2(2) := '07';  -- July
+    v_start_year   VARCHAR2(4) := '2025';
+    v_start_date   DATE;
+    v_end_date     DATE;
+    v_current_date DATE;
+    v_month_count  NUMBER;
+BEGIN
+    v_start_date := TO_DATE('01-' || v_start_month || '-' || v_start_year, 'DD-MM-YYYY');
+    v_end_date   := TRUNC(LAST_DAY(SYSDATE));  -- Current month end
+    
+    -- Calculate number of months from July 2025 to current month
+    v_month_count := MONTHS_BETWEEN(TRUNC(v_end_date, 'MM'), TRUNC(v_start_date, 'MM')) + 1;
+    
+    DBMS_LOB.CREATETEMPORARY(v_sql, TRUE);
+
+    -------------------------------------------------------------------------
+    -- MAIN (GROUPED) SELECT - Individual Sale Officers
+    -------------------------------------------------------------------------
+    DBMS_LOB.APPEND(v_sql, '
+SELECT
+    UM.USER_NAME            AS SALE_OFFICER,
+    TO_CHAR(UM.USER_ID)     AS USER_ID,
+   
+    TO_CHAR(
+        ROUND(SUM(NVL(SOD.NO_BAGS, 0) + NVL(POD.CHANGE_BAGS, 0))),
+        ''999,999,999,999,999,999,990''
+        ) AS TOTAL_BAGS'
+    );
+
+    -- Generate columns for each month from July 2025 to current month
+    FOR i IN REVERSE 0 .. v_month_count-1 LOOP
+        v_current_date := ADD_MONTHS(v_start_date, i);
+        
+        DBMS_LOB.APPEND(v_sql, ',
+    NVL(TO_CHAR(
+        ROUND(SUM(
+            CASE WHEN TRUNC(SO.ORDER_DATE, ''MM'') = DATE ''' || TO_CHAR(v_current_date,'YYYY-MM-DD') || '''
+                 THEN NVL(SOD.NO_BAGS,0) + NVL(POD.CHANGE_BAGS,0) END
+        )),
+        ''999,999,999,999,999,999,990''
+    ),0) AS ' || UPPER(TO_CHAR(v_current_date, 'MON_YYYY')));
+    END LOOP;
+
+    DBMS_LOB.APPEND(v_sql, '
+FROM AB_SO_ORDER_HEAD SO
+JOIN AB_SO_ORDER_DET SOD ON SOD.SO_ID = SO.SO_ID
+JOIN AB_UM_APPLICATION_USERS UM ON UM.USER_ID = SO.SALE_OFFER_ID
+LEFT JOIN AB_PO_PURCHASE_ORDER PO ON PO.PO_ID = SO.SO_IDS
+LEFT JOIN AB_PO_PURCHASE_ORDER_DET POD
+       ON POD.PO_ID = PO.PO_ID
+      AND POD.DET_TYPE = ''642''
+WHERE SO.SO_TYPE IN (''SALE ORDER'',''ASO'',''645'')
+  AND SO.ORG_ID = :GV_ORG_ID
+  AND SO.STATUS = ''Y''
+  AND SOD.STATUS = ''Y''
+  
+  AND SO.ORDER_DATE BETWEEN DATE ''' || TO_CHAR(v_start_date,'YYYY-MM-DD') || '''
+                        AND DATE ''' || TO_CHAR(v_end_date,'YYYY-MM-DD') || '''
+     AND  (SO.SO_TYPE IN ( SELECT REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) FROM dual 
+   CONNECT BY REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) IS NOT NULL ) OR :P1136_BAGS_TYPE IS NULL)         
+GROUP BY UM.USER_NAME, UM.USER_ID
+
+
+UNION ALL
+
+');
+
+    -------------------------------------------------------------------------
+    -- TOTAL ROW (no GROUP BY) - Sum of all columns
+    -------------------------------------------------------------------------
+    DBMS_LOB.APPEND(v_sql, '
+SELECT
+    ''TOTAL'' AS SALE_OFFICER,
+     ''TO_CHAR(UM.USER_ID)''      AS USER_ID,
+    ''<strong>'' || TO_CHAR(
+        ROUND(SUM(NVL(SOD.NO_BAGS, 0) + NVL(POD.CHANGE_BAGS, 0))),
+        ''999,999,999,999,999,999,990''
+        ) || ''</strong>'' AS TOTAL_BAGS'
+    );
+
+    -- Generate total columns for each month
+    FOR i IN REVERSE 0 .. v_month_count-1 LOOP
+        v_current_date := ADD_MONTHS(v_start_date, i);
+        
+        DBMS_LOB.APPEND(v_sql, ',
+    ''<strong>'' || NVL(TO_CHAR(
+        ROUND(SUM(
+            CASE WHEN TRUNC(SO.ORDER_DATE, ''MM'') = DATE ''' || TO_CHAR(v_current_date,'YYYY-MM-DD') || '''
+                 THEN NVL(SOD.NO_BAGS,0) + NVL(POD.CHANGE_BAGS,0) END
+        )),
+        ''999,999,999,999,999,999,990''
+    ),0) || ''</strong>'' AS ' || UPPER(TO_CHAR(v_current_date, 'MON_YYYY')));
+    END LOOP;
+
+    DBMS_LOB.APPEND(v_sql, '
+FROM AB_SO_ORDER_HEAD SO
+JOIN AB_SO_ORDER_DET SOD ON SOD.SO_ID = SO.SO_ID
+JOIN AB_UM_APPLICATION_USERS UM ON UM.USER_ID = SO.SALE_OFFER_ID
+LEFT JOIN AB_PO_PURCHASE_ORDER PO ON PO.PO_ID = SO.SO_IDS
+LEFT JOIN AB_PO_PURCHASE_ORDER_DET POD
+       ON POD.PO_ID = PO.PO_ID
+      AND POD.DET_TYPE = ''642''
+WHERE SO.SO_TYPE IN (''SALE ORDER'',''ASO'',''645'')
+  AND SO.ORG_ID = :GV_ORG_ID
+  AND SO.STATUS = ''Y''
+  AND SOD.STATUS = ''Y''
+  
+  AND SO.ORDER_DATE BETWEEN DATE ''' || TO_CHAR(v_start_date,'YYYY-MM-DD') || '''
+                        AND DATE ''' || TO_CHAR(v_end_date,'YYYY-MM-DD') || '''
+     AND  (SO.SO_TYPE IN ( SELECT REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) FROM dual 
+   CONNECT BY REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) IS NOT NULL ) OR :P1136_BAGS_TYPE IS NULL)         
+');
+
+    RETURN v_sql;
+END;
+
+
+
+
+
+
+-- DECLARE
+--     v_sql          CLOB;
+--     v_start_month  VARCHAR2(2) := '07';  -- July
+--     v_start_year   VARCHAR2(4) := '2025';
+--     v_start_date   DATE;
+--     v_end_date     DATE;
+--     v_current_date DATE;
+--     v_month_count  NUMBER;
+-- BEGIN
+--     v_start_date := TO_DATE('01-' || v_start_month || '-' || v_start_year, 'DD-MM-YYYY');
+--     v_end_date   := TRUNC(LAST_DAY(SYSDATE));  -- Current month end
+    
+--     -- Calculate number of months from July 2025 to current month
+--     v_month_count := MONTHS_BETWEEN(TRUNC(v_end_date, 'MM'), TRUNC(v_start_date, 'MM')) + 1;
+    
+--     DBMS_LOB.CREATETEMPORARY(v_sql, TRUE);
+
+--     -------------------------------------------------------------------------
+--     -- MAIN (GROUPED) SELECT
+--     -------------------------------------------------------------------------
+--     DBMS_LOB.APPEND(v_sql, '
+-- SELECT
+--     UM.USER_NAME            AS SALE_OFFICER,
+--     TO_CHAR(UM.USER_ID)     AS USER_ID,
+   
+--     TO_CHAR(
+--         ROUND(SUM(NVL(SOD.NO_BAGS, 0) + NVL(POD.CHANGE_BAGS, 0))),
+--         ''999,999,999,999,999,999,990''
+--         ) AS TOTAL_BAGS'
+--     );
+
+--     -- Generate columns for each month from July 2025 to current month
+--     FOR i IN REVERSE 0 .. v_month_count-1 LOOP
+--         v_current_date := ADD_MONTHS(v_start_date, i);
+        
+--         DBMS_LOB.APPEND(v_sql, ',
+--     -- Modified to match the correct sum calculation
+--     NVL(TO_CHAR(
+--         ROUND(SUM(
+--             CASE WHEN TRUNC(SO.ORDER_DATE, ''MM'') = DATE ''' || TO_CHAR(v_current_date,'YYYY-MM-DD') || '''
+--                  THEN NVL(SOD.NO_BAGS,0) + NVL(POD.CHANGE_BAGS,0) END
+--         )),
+--         ''999,999,999,999,999,999,990''
+--     ),0) AS ' || UPPER(TO_CHAR(v_current_date, 'MON_YYYY')));
+--     END LOOP;
+
+--     DBMS_LOB.APPEND(v_sql, '
+-- FROM AB_SO_ORDER_HEAD SO
+-- JOIN AB_SO_ORDER_DET SOD ON SOD.SO_ID = SO.SO_ID
+-- JOIN AB_UM_APPLICATION_USERS UM ON UM.USER_ID = SO.SALE_OFFER_ID
+-- LEFT JOIN AB_PO_PURCHASE_ORDER PO ON PO.PO_ID = SO.SO_IDS
+-- LEFT JOIN AB_PO_PURCHASE_ORDER_DET POD
+--        ON POD.PO_ID = PO.PO_ID
+--       AND POD.DET_TYPE = ''642''
+-- WHERE SO.SO_TYPE IN (''SALE ORDER'',''ASO'',''645'')
+--   AND SO.ORG_ID = :GV_ORG_ID
+--   AND SO.STATUS = ''Y''
+--   AND SOD.STATUS = ''Y''
+--   AND UM.USER_ID NOT IN (74, 70, 49)
+--   AND SO.ORDER_DATE BETWEEN DATE ''' || TO_CHAR(v_start_date,'YYYY-MM-DD') || '''
+--                         AND DATE ''' || TO_CHAR(v_end_date,'YYYY-MM-DD') || '''
+--      AND  (SO.SO_TYPE IN ( SELECT REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) FROM dual 
+--    CONNECT BY REGEXP_SUBSTR(:P1136_BAGS_TYPE, ''[^:]+'', 1, LEVEL) IS NOT NULL ) OR :P1136_BAGS_TYPE IS NULL)         
+-- GROUP BY UM.USER_NAME, UM.USER_ID');
+
+--     RETURN v_sql;
+-- END;
