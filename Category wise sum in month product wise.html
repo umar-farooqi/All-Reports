@@ -1,0 +1,324 @@
+DECLARE
+    v_start_date  DATE := DATE '2025-07-01';
+    v_end_date    DATE := TRUNC(LAST_DAY(SYSDATE));
+    v_mo_count    PLS_INTEGER;
+    v_pi          PLS_INTEGER;
+    v_pmax        PLS_INTEGER := 0;
+    v_gtot        NUMBER := 0;
+    v_current_category VARCHAR2(100);
+
+    TYPE arr_vc IS TABLE OF VARCHAR2(500) INDEX BY PLS_INTEGER;
+    TYPE arr_num IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+
+    a_pid      arr_vc;
+    a_pname    arr_vc;
+    a_category arr_vc;
+    a_ptotal   arr_num;
+    a_bags     arr_num;
+    a_motot    arr_num;
+
+    v_cat_total NUMBER := 0;
+    a_cat_motot arr_num;
+
+BEGIN
+
+    v_mo_count := MONTHS_BETWEEN(TRUNC(v_end_date,'MM'), TRUNC(v_start_date,'MM')) + 1;
+
+    FOR i IN 0 .. v_mo_count-1 LOOP
+        a_motot(i) := 0;
+        a_cat_motot(i) := 0;
+    END LOOP;
+
+    ------------------------------------------------------------------
+    -- DATA LOOP
+    ------------------------------------------------------------------
+    FOR r IN (
+        WITH USER_APPROVAL AS (
+            SELECT APP_IDS APP_ID
+            FROM AB_USER_ACTION_APPROVAL
+            WHERE APP_TYPE='820'
+              AND STATUS='Y'
+              AND APPROVAL_STATUS='APPROVED'
+        ),
+        CATEGORY_NAMES AS (
+            SELECT  LOOKUP_DET_NAME CATEGORY_NAME,
+            DET_ID
+            FROM AB_LOOKUP_DETAIL
+            WHERE STATUS='Y'
+              AND MAST_ID=1
+              AND ORG_ID = :GV_ORG_ID
+        ),
+        SHIPMENT_DATA AS (
+            SELECT
+                C.ITEM_ID,
+                C.PRODUCT_NAME,
+                NVL(C.NO_BAGS,0) NO_BAGS,
+                TRUNC(C.SHIPMENT_DATE,'MM') SHIP_MONTH,
+                C.STATUS,
+                
+                NVL(CN.CATEGORY_NAME,'Others') CATEGORY_NAME,
+                CN.DET_ID
+            FROM TABLE(AB_SALE_ORDER_PKG.SALE_ORDER_SHIPMENT(:GV_ORG_ID)) C
+            JOIN USER_APPROVAL UA ON UA.APP_ID = C.SHIPMENT_IDD
+            JOIN AB_ITEMS_MASTER ITMS ON ITMS.ITEM_ID = C.ITEM_ID
+            LEFT JOIN CATEGORY_NAMES CN ON CN.DET_ID = ITMS.PRODUCT_CATEGORY_ID
+            WHERE TRUNC(C.SHIPMENT_DATE) BETWEEN v_start_date AND v_end_date
+        )
+        SELECT
+            ITEM_ID,
+            PRODUCT_NAME,
+            CATEGORY_NAME,
+            
+            TRUNC(MONTHS_BETWEEN(TRUNC(SHIP_MONTH,'MM'), TRUNC(v_start_date,'MM'))) m_idx,
+            SUM(NO_BAGS) bags,
+            DET_ID
+        FROM SHIPMENT_DATA
+
+WHERE 
+(
+    :P1171_ITEM_NAME IS NULL 
+    OR ITEM_ID IN (
+        SELECT TO_NUMBER(REGEXP_SUBSTR(:P1171_ITEM_NAME, '[^:]+', 1, LEVEL))
+        FROM dual
+        CONNECT BY REGEXP_SUBSTR(:P1171_ITEM_NAME, '[^:]+', 1, LEVEL) IS NOT NULL
+    )
+)
+
+AND (
+    :P1171_BAGS_TYPE IS NULL
+    OR UPPER(TRIM(STATUS)) IN (
+        SELECT UPPER(TRIM(REGEXP_SUBSTR(:P1171_BAGS_TYPE, '[^:]+', 1, LEVEL)))
+        FROM dual
+        CONNECT BY REGEXP_SUBSTR(:P1171_BAGS_TYPE, '[^:]+', 1, LEVEL) IS NOT NULL
+    )
+)
+
+AND (
+    :P1171_CATEGORY_NAME IS NULL
+    OR NVL(DET_ID,0) IN (
+        SELECT TO_NUMBER(REGEXP_SUBSTR(:P1171_CATEGORY_NAME, '[^:]+', 1, LEVEL))
+        FROM dual
+        CONNECT BY REGEXP_SUBSTR(:P1171_CATEGORY_NAME, '[^:]+', 1, LEVEL) IS NOT NULL
+    )
+)
+
+         
+   
+        GROUP BY ITEM_ID, PRODUCT_NAME, CATEGORY_NAME, SHIP_MONTH, DET_ID
+        ORDER BY CATEGORY_NAME, PRODUCT_NAME
+    ) LOOP
+
+        v_pi := NULL;
+
+        FOR k IN 0 .. v_pmax-1 LOOP
+            IF a_pid(k) = r.ITEM_ID THEN
+                v_pi := k;
+                EXIT;
+            END IF;
+        END LOOP;
+
+        IF v_pi IS NULL THEN
+            v_pi := v_pmax;
+            a_pid(v_pi) := r.ITEM_ID;
+            a_pname(v_pi) := r.PRODUCT_NAME;
+            a_category(v_pi) := r.CATEGORY_NAME;
+            a_ptotal(v_pi) := 0;
+
+            FOR m IN 0 .. v_mo_count-1 LOOP
+                a_bags(v_pi*200+m) := 0;
+            END LOOP;
+
+            v_pmax := v_pmax + 1;
+        END IF;
+
+        IF r.m_idx BETWEEN 0 AND v_mo_count-1 THEN
+
+            a_bags(v_pi*200 + r.m_idx) := NVL(a_bags(v_pi*200 + r.m_idx),0) + r.bags;
+            a_ptotal(v_pi) := NVL(a_ptotal(v_pi),0) + r.bags;
+
+            -- v_cat_total := NVL(v_cat_total,0) + r.bags;
+            -- a_cat_motot(r.m_idx) := NVL(a_cat_motot(r.m_idx),0) + r.bags;
+
+            a_motot(r.m_idx) := NVL(a_motot(r.m_idx),0) + r.bags;
+            v_gtot := NVL(v_gtot,0) + r.bags;
+
+        END IF;
+
+    END LOOP;
+
+htp.p('<script>
+function printDiv(id) {
+    var content = document.getElementById(id);
+    if (!content) {
+        alert("Report not found!");
+        return;
+    }
+
+    var win = window.open("", "", "width=1100,height=750");
+    win.document.write("<html><head><title>Product Sales Report Month Wise</title>");
+    win.document.write("<style>");
+
+    /* ── Page Setup ── */
+    win.document.write("@page { size: A3 landscape; margin: 10mm; }");
+
+    /* ── Force ALL background colors to print ── */
+    win.document.write("* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }");
+
+    /* ── Base ── */
+    win.document.write("body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 10px; }");
+
+    /* ── Heading ── */
+    win.document.write("h3 { background: #1F3864 !important; color: white !important; text-align: center; padding: 6px; margin: 0 0 0 0; font-size: 13px; }");
+
+    /* ── Table ── */
+    win.document.write("table { border-collapse: collapse; width: 100%; table-layout: auto; }");
+    win.document.write("th, td { border: 1px solid #999; padding: 3px 5px; font-size: 9px; text-align: center; white-space: nowrap; line-height: 1.3; }");
+    win.document.write("td:nth-child(2) { text-align: left; }"); /* Product name left-aligned */
+
+    /* ── Header row ── */
+    win.document.write("th { background: #1F3864 !important; color: white !important; }");
+
+    /* ── Category header rows  (inline style: background:#E6F3FF) ── */
+    win.document.write("tr[style*=''E6F3FF''] td { background: #E6F3FF !important; font-weight: bold; text-align: left; }");
+
+    /* ── Sub-total rows  (inline style: background:#FFF2CC) ── */
+    win.document.write("tr[style*=''FFF2CC''] td { background: #FFF2CC !important; font-weight: bold; }");
+
+    /* ── Grand-total row  (inline style: background:#E2EFDA) ── */
+    win.document.write("tr[style*=''E2EFDA''] td { background: #E2EFDA !important; font-weight: bold; }");
+
+    /* ── Zebra stripe for plain product rows ── */
+    win.document.write("tr:not([style]) td { background: #ffffff; }");
+
+    /* ── Avoid page breaks inside sub-total / category rows ── */
+    win.document.write("tr { page-break-inside: avoid; }");
+
+    /* ── Keep heading with table ── */
+    win.document.write("#report-content { margin: 0; padding: 0; }");
+
+    win.document.write("</style>");
+    win.document.write("</head><body>");
+    win.document.write(content.innerHTML);
+    win.document.write("</body></html>");
+
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
+}
+</script>');
+
+
+htp.p('<button type="button" class="button" onclick="printDiv(''report-content'')">Print Report</button>');
+
+
+    ------------------------------------------------------------------
+    -- REPORT PRINT
+    ------------------------------------------------------------------
+    htp.p('<div id="report-content">');
+    htp.p('<h3 style="background:#1F3864;color:white;text-align:center;">Product Sales Report</h3>');
+    htp.p('<table border="1" style="width:100%;border-collapse:collapse;">');
+
+    htp.p('<tr style="background:#1F3864;color:white;">');
+    htp.p('<th>Category</th><th>Product</th><th>Total</th>');
+
+    FOR i IN REVERSE 0 .. v_mo_count-1 LOOP
+        htp.p('<th>'||TO_CHAR(ADD_MONTHS(v_start_date,i),'MON-YYYY')||'</th>');
+    END LOOP;
+
+    htp.p('</tr>');
+
+    v_current_category := NULL;
+
+    ------------------------------------------------------------------
+    -- PRINT LOOP
+    ------------------------------------------------------------------
+    FOR pi IN 0 .. v_pmax-1 LOOP
+
+        -- CATEGORY CHANGE
+        IF NVL(a_category(pi),'X') != NVL(v_current_category,'X') THEN
+
+            -- PRINT PREVIOUS CATEGORY TOTAL
+            IF v_current_category IS NOT NULL THEN
+                htp.p('<tr style="background:#FFF2CC;font-weight:bold;">');
+                htp.p('<td colspan="2">Sub Total ('||v_current_category||')</td>');
+                htp.p('<td>'||TO_CHAR(v_cat_total,'999,999,990')||'</td>');
+
+          
+
+                FOR mi IN REVERSE 0 .. v_mo_count-1 LOOP
+                    htp.p('<td>'||TO_CHAR(NVL(a_cat_motot(mi),0),'999,999,990')||'</td>');
+                END LOOP;
+
+                htp.p('</tr>');
+            END IF;
+
+            -- RESET CATEGORY TOTAL
+            v_cat_total := 0;
+            FOR mi IN 0 .. v_mo_count-1 LOOP
+                a_cat_motot(mi) := 0;
+            END LOOP;
+
+            -- PRINT CATEGORY HEADER
+            htp.p('<tr style="background:#E6F3FF;font-weight:bold;">');
+            htp.p('<td colspan="'||(v_mo_count+3)||'">'||a_category(pi)||'</td>');
+            htp.p('</tr>');
+
+            v_current_category := a_category(pi);
+
+        END IF;
+
+                  -- ✅ CORRECT PLACE (har product row ke liye)
+        v_cat_total := NVL(v_cat_total,0) + NVL(a_ptotal(pi),0);
+
+        FOR mi IN 0 .. v_mo_count-1 LOOP
+            a_cat_motot(mi) := NVL(a_cat_motot(mi),0) + NVL(a_bags(pi*200+mi),0);
+        END LOOP;
+
+        -- PRINT PRODUCT ROW
+        htp.p('<tr>');
+        htp.p('<td></td>');
+        htp.p('<td>'||a_pname(pi)||'</td>');
+        htp.p('<td>'||TO_CHAR(a_ptotal(pi),'999,999,990')||'</td>');
+
+        FOR mi IN REVERSE 0 .. v_mo_count-1 LOOP
+            htp.p('<td>'||
+                CASE WHEN NVL(a_bags(pi*200+mi),0)=0
+                     THEN '-'
+                     ELSE TO_CHAR(a_bags(pi*200+mi),'999,999,990')
+                END
+            ||'</td>');
+        END LOOP;
+
+        htp.p('</tr>');
+
+    END LOOP;
+
+    -- LAST CATEGORY TOTAL
+    IF v_current_category IS NOT NULL THEN
+        htp.p('<tr style="background:#FFF2CC;font-weight:bold;">');
+        htp.p('<td colspan="2">Sub Total ('||v_current_category||')</td>');
+        htp.p('<td>'||TO_CHAR(v_cat_total,'999,999,990')||'</td>');
+
+        FOR mi IN REVERSE 0 .. v_mo_count-1 LOOP
+            htp.p('<td>'||TO_CHAR(NVL(a_cat_motot(mi),0),'999,999,990')||'</td>');
+        END LOOP;
+
+        htp.p('</tr>');
+    END IF;
+
+    -- GRAND TOTAL
+    htp.p('<tr style="background:#E2EFDA;font-weight:bold;">');
+    htp.p('<td colspan="2">TOTAL</td>');
+    htp.p('<td>'||TO_CHAR(v_gtot,'999,999,990')||'</td>');
+
+    FOR mi IN REVERSE 0 .. v_mo_count-1 LOOP
+        htp.p('<td>'||TO_CHAR(NVL(a_motot(mi),0),'999,999,990')||'</td>');
+    END LOOP;
+
+    htp.p('</tr>');
+
+    htp.p('</table>');
+    htp.p('</div>');
+
+END;
